@@ -439,6 +439,14 @@ zfs_unmount(zfs_handle_t *zhp, const char *mountpoint, int flags)
 			mntpt = zfs_strdup(hdl, entry.mnt_mountp);
 		else
 			mntpt = zfs_strdup(hdl, mountpoint);
+		/* First check if there is a .zfs dir */
+		char ctldir[MAXPATHLEN];
+		struct mnttab entry_ctl;
+		sprintf(ctldir,"%s/.zfs",zhp->zfs_name);
+		if (libzfs_mnttab_find(hdl, ctldir, &entry_ctl) == 0) {
+		    if (unmount_one(hdl, ctldir, flags) == 0) 
+			libzfs_mnttab_remove(hdl, ctldir);
+		}
 
 		/*
 		 * Unshare and unmount the filesystem
@@ -454,6 +462,7 @@ zfs_unmount(zfs_handle_t *zhp, const char *mountpoint, int flags)
 		libzfs_mnttab_remove(hdl, zhp->zfs_name);
 		free(mntpt);
 	}
+	rmdir(mountpoint);
 
 	return (0);
 }

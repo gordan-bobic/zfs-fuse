@@ -45,9 +45,7 @@ extern "C" {
 
 void zfsctl_create(zfsvfs_t *);
 void zfsctl_destroy(zfsvfs_t *);
-/* ZFSFUSE: not implemented */
-/*vnode_t *zfsctl_root(znode_t *);*/
-#define zfsctl_root(zp) (abort(), NULL)
+vnode_t *zfsctl_root(znode_t *);
 void zfsctl_init(void);
 void zfsctl_fini(void);
 boolean_t zfsctl_is_node(vnode_t *);
@@ -55,6 +53,7 @@ boolean_t zfsctl_is_node(vnode_t *);
 int zfsctl_rename_snapshot(const char *from, const char *to);
 int zfsctl_destroy_snapshot(const char *snapname, int force);
 int zfsctl_umount_snapshots(vfs_t *, int, cred_t *);
+void fuse_setup_ctldir(zfsvfs_t *zfsvfs, const char *dir);
 
 /* ZFSFUSE: not implemented */
 /*int zfsctl_root_lookup(vnode_t *dvp, char *nm, vnode_t **vpp, pathname_t *pnp,
@@ -69,6 +68,15 @@ int zfsctl_lookup_objset(vfs_t *vfsp, uint64_t objsetid, zfsvfs_t **zfsvfsp);
 #define	ZFSCTL_INO_ROOT		0x1
 #define	ZFSCTL_INO_SNAPDIR	0x2
 #define	ZFSCTL_INO_SHARES	0x3
+
+static int int_zfs_enter(zfsvfs_t *zfsvfs) {
+    ZFS_ENTER(zfsvfs);
+    return 0;
+}
+
+// This macro allows to call ZFS_ENTER from a void function without warning
+#define ZFS_VOID_ENTER(a) \
+    if (int_zfs_enter(zfsvfs) != 0) return;
 
 #ifdef	__cplusplus
 }
