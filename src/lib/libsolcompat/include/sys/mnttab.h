@@ -68,6 +68,7 @@ struct extmnttab {
 };
 
 extern int getmntany(FILE *fp, struct mnttab *mp, struct mnttab *mpref);
+extern int getmntsrc(FILE *fp, struct mnttab *mgetp, struct mnttab *mrefp);
 extern int _sol_getmntent(FILE *fp, struct mnttab *mp);
 extern int getextmntent(FILE *fp, struct extmnttab *mp, int len);
 

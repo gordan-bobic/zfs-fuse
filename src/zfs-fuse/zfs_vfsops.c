@@ -1881,7 +1881,7 @@ zfs_umount(vfs_t *vfsp, int fflag, cred_t *cr)
 	 * Unmount any snapshots mounted under .zfs before unmounting the
 	 * dataset itself.
 	 */
-	if (zfsvfs->z_show_ctldir &&
+	if (zfsvfs->z_ctldir &&
 	    (ret = zfsctl_umount_snapshots(vfsp, fflag, cr)) != 0) {
 		return (ret);
 	}
@@ -1933,7 +1933,7 @@ zfs_umount(vfs_t *vfsp, int fflag, cred_t *cr)
 	/*
 	 * We can now safely destroy the '.zfs' directory node.
 	 */
-	if (zfsvfs->z_show_ctldir)
+	if (zfsvfs->z_ctldir)
 		zfsctl_destroy(zfsvfs);
 
 	return (0);

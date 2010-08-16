@@ -185,6 +185,8 @@ extern void libzfs_mnttab_fini(libzfs_handle_t *);
 extern void libzfs_mnttab_cache(libzfs_handle_t *, boolean_t);
 extern int libzfs_mnttab_find(libzfs_handle_t *, const char *,
     struct mnttab *);
+extern int libzfs_mnttab_find_sub(libzfs_handle_t *hdl, const char *fsname,
+    struct mnttab *entry);
 extern void libzfs_mnttab_add(libzfs_handle_t *, const char *,
     const char *, const char *);
 extern void libzfs_mnttab_remove(libzfs_handle_t *, const char *);

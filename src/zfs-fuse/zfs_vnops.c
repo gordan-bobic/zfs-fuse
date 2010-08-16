@@ -2214,10 +2214,16 @@ zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp,
 			(void) strcpy(zap.za_name, "..");
 			zap.za_normalization_conflict = 0;
 			objnum = parent;
+#if 0
+			/* zfs-fuse : does not work this way here
+			 * for us, .zfs is a normal inode which points to a
+			 * normal .zfs directory, no need to do this kind of
+			 * hack to display it */
 		} else if (offset == 2 && zfs_show_ctldir(zp)) {
 			(void) strcpy(zap.za_name, ZFS_CTLDIR_NAME);
 			zap.za_normalization_conflict = 0;
 			objnum = ZFSCTL_INO_ROOT;
+#endif
 		} else {
 			/*
 			 * Grab next entry.
@@ -2323,7 +2329,9 @@ zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp,
 		/*
 		 * Move to the next entry, fill in the previous offset.
 		 */
-		if (offset > 2 || (offset == 2 && !zfs_show_ctldir(zp))) {
+		// if (offset > 2 || (offset == 2 && !zfs_show_ctldir(zp))) {
+		// zfs-fuse : no special handling for offset==2 (.zfs)
+		if (offset > 1) {
 			zap_cursor_advance(&zc);
 			offset = zap_cursor_serialize(&zc);
 		} else {

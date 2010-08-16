@@ -87,26 +87,66 @@
 #define ctldir_str "snapshot"
 static const char *ctldir_name = "snapshot";
 
+static char **temp_snap;
+static int used_snap,alloc_snap,destroy_snaps;
+
+static void conv_spaces(char *buff) {
+    char *s;
+    // decode spaces
+    while (s = strstr(buff,"\\040")) {
+	*s = ' ';
+	strcpy(&s[1],&s[4]);
+    }
+}
+
+static int get_mtpoint(zfsvfs_t *zfsvfs, char *mt,int size) {
+    // libfuse has the equivalent of this function, but it can't be called
+    // from "kernel" mode (aka zfs-fuse). And I don't find how to access the
+    // mountpoint property.
+    // So here is my version (usefull when changing snapdir after the dataset
+    // has been mounted)
+    FILE *f = fopen("/proc/mounts","r");
+    char osname[MAXNAMELEN];
+    char snap[MAXNAMELEN+6];
+    char buff[2048];
+
+    dmu_objset_name(zfsvfs->z_os, osname);
+    
+    char *s;
+    // Spaces conversion
+    while (s = strchr(osname,' ')) {
+	memmove(&s[4],&s[1],strlen(s));
+	strncpy(s,"\\040",4);
+    }
+    sprintf(snap,"%s/snap_",osname);
+    int len;
+    strcat(osname," ");
+    len = strlen(osname);
+    while (!feof(f)) {
+	fgets(buff,2048,f);
+	if (!strncmp(buff,osname,len)) { // found it
+	    char *s = &buff[len];
+	    char *e = strchr(s,' ');
+	    *e = 0;
+	    conv_spaces(s);
+	    strncpy(mt,s,size);
+	    fclose(f);
+	    return 0;
+	}
+    }
+    fclose(f);
+    return 1; // not found
+}
+
 /* This is taken from the hello_ll.c example code from fuse ! */
 static int ctldir_stat(fuse_ino_t ino, struct stat *stbuf)
 {
 	stbuf->st_ino = ino;
-	switch (ino) {
-	case 1:
-		stbuf->st_mode = S_IFDIR | 0555;
-		stbuf->st_nlink = 1;
-		break;
+	// stbuf->st_mode = S_IFREG | 0444;
+	stbuf->st_mode = S_IFDIR | 0555;
+	stbuf->st_nlink = 1;
+	stbuf->st_size = strlen(ctldir_str);
 
-	default:
-		// stbuf->st_mode = S_IFREG | 0444;
-		stbuf->st_mode = S_IFDIR | 0555;
-		stbuf->st_nlink = 1;
-		// stbuf->st_size = strlen(ctldir_str);
-		break;
-
-/*	default:
-		return -1; */
-	}
 	return 0;
 }
 
@@ -124,6 +164,37 @@ static void ctldir_getattr(fuse_req_t req, fuse_ino_t ino,
 		fuse_reply_attr(req, &stbuf, 1.0);
 }
 
+static void mount_snap(zfsvfs_t *zfsvfs, char *osname, const char *snapname) {
+    // find the snapshot for this inode...
+    if (destroy_snaps)
+	return;
+    char cmd[4096];
+    char mt[PATH_MAX];
+    sprintf(cmd,"%s/snap_%s",osname,snapname);
+    for (int n=0; n<used_snap; n++)
+	if (!strcmp(temp_snap[n],cmd)) {
+	    printf("mount_snap: %s already mounted\n",cmd);
+	    return;
+	}
+
+
+    if (used_snap == alloc_snap) {
+	alloc_snap += 10;
+	temp_snap = realloc(temp_snap, (alloc_snap*sizeof(char*)));
+    }
+    temp_snap[used_snap++] = strdup(cmd);
+
+    if (get_mtpoint(zfsvfs,mt,PATH_MAX) == 0) {
+	printf("got mt %s\n",mt);
+	snprintf(cmd,4096,"zfs clone -o mountpoint=\"%s/.zfs/snapshot/%s\" -o readonly=on %s@%s %s/snap_%s",mt,snapname,osname,snapname,osname,snapname);
+	printf("running cmd...\n");
+	int ret = system(cmd);
+	printf("cmd %s returned %d\n",cmd,ret);
+	return;
+    } else
+	printf("didn't find mountpoint ?\n");
+}
+
 static void ctldir_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
     struct fuse_entry_param e;
@@ -135,11 +206,18 @@ static void ctldir_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
     // Everything is a directory in .zfs, so initialise for a directory
     memset(&e, 0, sizeof(e));
-    e.ino = 2;
-    e.attr_timeout = 1.0;
-    e.entry_timeout = 1.0;
+    if (!strcmp(name,"."))
+	e.ino = 1;
+    else if (!strcmp(name,ctldir_name))
+	e.ino = 2;
+
+    // the root directory (.zfs) can be cached for ever, it will never change
+    e.attr_timeout = 86400;
+    e.entry_timeout = 86400;
     ctldir_stat(e.ino, &e.attr);
     if (parent != 1) { // lookup in snapshot
+	e.attr_timeout = 1;
+	e.entry_timeout = 1;
 	// Then we must return the correct inode.
 	// for now I ask the info about the snapshot, it should be fast
 	// enough and easier than maintain a list of names / inodes.
@@ -149,8 +227,14 @@ static void ctldir_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	    e.ino = dmu_objset_id(snap);
 	    TIMESTRUC_TO_TIME(dmu_objset_snap_cmtime(snap), &e.attr.st_atime);
 	    e.attr.st_mtime = e.attr.st_ctime = e.attr.st_atime;
-
 	    dmu_objset_rele(snap, FTAG);
+	    fuse_reply_entry(req, &e);
+	    /* the snapshot is mounted on a lookup call and not in readdir
+	     * because it's easier to reply correctly to lookup before the
+	     * mount */
+	    mount_snap(zfsvfs,osname,name);
+	    return;
+
 	} else { // not found
 	    fuse_reply_err(req, ENOENT);
 	    return;
@@ -243,12 +327,11 @@ static void ctldir_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		    return;
 		}
 		dirbuf_add(req, &b, snapname, ZFSCTL_INO_SNAP(id));
-		znode_t *znode;
-
 	    } while (error == 0);
 
 	default:
-	    fuse_reply_err(req, ENOTDIR);
+	    // snapshot directory
+	    fuse_reply_err(req,ENOTDIR);
     }
 }
 
@@ -500,7 +583,7 @@ void fuse_setup_ctldir(zfsvfs_t *zfsvfs, const char *dir) {
 	char osname[MAXNAMELEN];
 
 	dmu_objset_name(zfsvfs->z_os, osname);
-	sprintf(my_arg,"fsname=%s/.zfs,nonempty",osname);
+	sprintf(my_arg,"fsname=%s/.zfs,nonempty,allow_other",osname);
 	if(fuse_opt_add_arg(&args, "") == -1 ||
 	   fuse_opt_add_arg(&args, "-o") == -1 ||
 	   fuse_opt_add_arg(&args, my_arg) == -1) {
@@ -530,46 +613,6 @@ void fuse_setup_ctldir(zfsvfs_t *zfsvfs, const char *dir) {
     }
 }
 
-static int get_mtpoint(zfsvfs_t *zfsvfs, char *mt,int size) {
-    // libfuse has the equivalent of this function, but it can't be called
-    // from "kernel" mode (aka zfs-fuse). And I don't find how to access the
-    // mountpoint property.
-    // So here is my version (usefull when changing snapdir after the dataset
-    // has been mounted)
-    FILE *f = fopen("/proc/mounts","r");
-    char osname[MAXNAMELEN];
-    char buff[2048];
-
-    dmu_objset_name(zfsvfs->z_os, osname);
-    char *s;
-    // Spaces conversion
-    while (s = strchr(osname,' ')) {
-	memmove(&s[4],&s[1],strlen(s));
-	strncpy(s,"\\040",4);
-    }
-    int len = strlen(osname);
-    while (!feof(f)) {
-	fgets(buff,2048,f);
-	char buf2[2048];
-	snprintf(buf2,2048,"%s",buff);
-	if (!strncmp(buf2,osname,len)) { // found it
-	    char *s = &buf2[len+1];
-	    char *e = strchr(s,' ');
-	    *e = 0;
-	    strncpy(mt,s,size);
-	    // decode spaces
-	    while (s = strstr(mt,"\\040")) {
-		*s = ' ';
-		strcpy(&s[1],&s[4]);
-	    }
-	    fclose(f);
-	    return 0;
-	}
-    }
-    fclose(f);
-    return 1; // not found
-}
-
 /*
  * Create the '.zfs' directory.  This directory is cached as part of the VFS
  * structure.  This results in a hold on the vfs_t.  The code in zfs_umount()
@@ -579,53 +622,54 @@ static int get_mtpoint(zfsvfs_t *zfsvfs, char *mt,int size) {
 void
 zfsctl_create(zfsvfs_t *zfsvfs)
 {
-    if (!zfsvfs->z_show_ctldir)
-	return;
     char osname[MAXNAMELEN];
     dmu_objset_name(zfsvfs->z_os, osname);
-    printf("in zfsctl %s\n",osname);
     vnode_t *vp = NULL;
     zfsctl_node_t *zcp;
 
-    ASSERT(zfsvfs->z_ctldir == NULL);
+    if (!zfsvfs->z_ctldir) {
+	/* We will create .zfs *ALWAYS* when the dataset is mounted and keep
+	 * it locked (so that even if you run an rmdir on it, the vnode will
+	 * still be there). The reason for that is that if we create it when
+	 * z_show_snapdir changes, and if a thread is busy with a buffered
+	 * write operation, then it triggers a assertion failure !
+	 * So the safest solution is to create it here and keep it available
+	 * for later */
 
-    ZFS_VOID_ENTER(zfsvfs);
+	ZFS_VOID_ENTER(zfsvfs);
 
-    znode_t *znode;
+	znode_t *znode;
 
-    int error = zfs_zget(zfsvfs, 3, &znode);
-    if(error) {
-	ZFS_EXIT(zfsvfs);
-	printf("could not find root node for .zfs ???\n");
-	return;
-    }
-
-    ASSERT(znode != NULL);
-    vnode_t *dvp = ZTOV(znode);
-    ASSERT(dvp != NULL);
-
-#if 1
-    error = VOP_LOOKUP(dvp, ".zfs", &vp, NULL, 0, NULL, kcred, NULL, NULL, NULL);
-    if (vp == NULL) {
-	// create it
-	printf("creation .zfs\n");
-	vattr_t vattr = { 0 };
-	vattr.va_type = VDIR;
-	vattr.va_mode = 0555 & PERMMASK;
-	vattr.va_mask = AT_TYPE | AT_MODE;
-
-	error = VOP_MKDIR(dvp, ".zfs", &vattr, &vp, kcred, NULL, 0, NULL);
-	if (error) {
-	    printf("could not create .zfs, got error %d\n",error);
-	    errno = error;
-	    perror("mkdir");
-	    zfsvfs->z_show_ctldir = B_FALSE;
+	int error = zfs_zget(zfsvfs, 3, &znode, B_FALSE);
+	if(error) {
+	    ZFS_EXIT(zfsvfs);
+	    return;
 	}
+
+	ASSERT(znode != NULL);
+	vnode_t *dvp = ZTOV(znode);
+	ASSERT(dvp != NULL);
+
+	error = VOP_LOOKUP(dvp, ".zfs", &vp, NULL, 0, NULL, kcred, NULL, NULL, NULL);
+	if (vp == NULL) {
+	    // create it
+	    vattr_t vattr = { 0 };
+	    vattr.va_type = VDIR;
+	    vattr.va_mode = 0555 & PERMMASK;
+	    vattr.va_mask = AT_TYPE | AT_MODE;
+
+	    error = VOP_MKDIR(dvp, ".zfs", &vattr, &vp, kcred, NULL, 0, NULL);
+	    if (error) {
+		zfsvfs->z_show_ctldir = B_FALSE;
+	    }
+	}
+	zfsvfs->z_ctldir = vp;
+	// vp can't be released here
+	// if (vp) VN_RELE(vp);
+	VN_RELE(dvp);
+	ZFS_EXIT(zfsvfs);
     }
-#endif
-    if (vp) VN_RELE(vp);
-    VN_RELE(dvp);
-    ZFS_EXIT(zfsvfs);
+
     char mt[PATH_MAX];
     if (get_mtpoint(zfsvfs,mt,PATH_MAX) == 0) 
 	fuse_setup_ctldir(zfsvfs,mt);
@@ -663,12 +707,8 @@ void
 zfsctl_destroy(zfsvfs_t *zfsvfs)
 {
     printf("zfsctl_destroy\n");
-
-/*    const char *pt = fuse_get_mountpoint(zfsvfs);
-    char mntdir[PATH_MAX];
-    sprintf(mntdir,"%s/.zfs",pt);
-    int ret = fuse_unmount_path(mntdir);
-    printf("destroying %s -> %d\n",mntdir,ret); */
+    VN_RELE(zfsvfs->z_ctldir);
+    zfsvfs->z_ctldir = NULL;
 }
 
 /*
@@ -678,6 +718,7 @@ zfsctl_destroy(zfsvfs_t *zfsvfs)
 vnode_t *
 zfsctl_root(znode_t *zp)
 {
+    printf("in root\n");
 	ASSERT(zfs_has_ctldir(zp));
 	VN_HOLD(zp->z_zfsvfs->z_ctldir);
 	return (zp->z_zfsvfs->z_ctldir);
@@ -1664,52 +1705,32 @@ zfsctl_umount_snapshots(vfs_t *vfsp, int fflags, cred_t *cr)
      * Well calling fuse functions directly create a thread contention problem
      * because we are executing a fuse command here, so the only solution left
      * is to do like the zfs command, call the command umount... */
+    printf("umount snapshots\n");
+    destroy_snaps = 1;
     char osname[MAXNAMELEN];
 
     dmu_objset_name(zfsvfs->z_os, osname);
-    sprintf(dir,"umount \"%s/.zfs\"",osname);
-    system(dir);
-    return 0;
-#if 0
-	zfsvfs_t *zfsvfs = vfsp->vfs_data;
-	vnode_t *dvp;
-	zfsctl_snapdir_t *sdp;
-	zfs_snapentry_t *sep, *next;
-	int error;
-
-	ASSERT(zfsvfs->z_ctldir != NULL);
-	error = zfsctl_root_lookup(zfsvfs->z_ctldir, "snapshot", &dvp,
-	    NULL, 0, NULL, cr, NULL, NULL, NULL);
-	if (error != 0)
-		return (error);
-	sdp = dvp->v_data;
-
-	mutex_enter(&sdp->sd_lock);
-
-	sep = avl_first(&sdp->sd_snaps);
-	while (sep != NULL) {
-		next = AVL_NEXT(&sdp->sd_snaps, sep);
-
-		/*
-		 * If this snapshot is not mounted, then it must
-		 * have just been unmounted by somebody else, and
-		 * will be cleaned up by zfsctl_snapdir_inactive().
-		 */
-		if (vn_ismntpt(sep->se_root)) {
-			avl_remove(&sdp->sd_snaps, sep);
-			error = zfsctl_unmount_snap(sep, fflags, cr);
-			if (error) {
-				avl_add(&sdp->sd_snaps, sep);
-				break;
-			}
-		}
-		sep = next;
+    char base[4096];
+    sprintf(base,"%s/snap_",osname);
+    int len = strlen(base);
+    for (int n=0; n<used_snap; n++) {
+	if (!strncmp(temp_snap[n],base,len)) {
+	    char cmd[4096];
+	    snprintf(cmd,4096,"zfs destroy %s",temp_snap[n]);
+	    int ret = system(cmd);
+	    printf("cmd %s returned %d\n",cmd,ret);
+	    free(temp_snap[n]);
+	    if (n < used_snap-1)
+		memmove(&temp_snap[n],&temp_snap[n+1],(used_snap-n-1)*sizeof(char *));
+	    used_snap--;
+	    n--;
 	}
-
-	mutex_exit(&sdp->sd_lock);
-	VN_RELE(dvp);
-
-	return (error);
-#endif
+    }
+    if (used_snap == 0 && temp_snap)
+	free(temp_snap);
+    destroy_snaps = 0;
+    // sprintf(dir,"umount \"%s/.zfs\"",osname);
+    // system(dir);
+    return 0;
 }
 

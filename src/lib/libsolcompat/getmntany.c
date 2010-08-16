@@ -53,6 +53,18 @@ getmntany(FILE *fp, struct mnttab *mgetp, struct mnttab *mrefp)
 	return ret;
 }
 
+/* like getmntany but gets any path starting by mnt_special */
+int
+getmntsrc(FILE *fp, struct mnttab *mgetp, struct mnttab *mrefp)
+{
+	int ret;
+
+	int len = strlen(mrefp->mnt_special);
+	while ((ret = _sol_getmntent(fp, mgetp)) == 0 && (strncmp(mrefp->mnt_special,mgetp->mnt_special,len) != 0 || DIFF(mnt_mountp) || DIFF(mnt_fstype) || DIFF(mnt_mntopts)));
+
+	return ret;
+}
+
 int _sol_getmntent(FILE *fp, struct mnttab *mgetp)
 {
 	struct mntent mntbuf;

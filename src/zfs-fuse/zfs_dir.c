@@ -152,8 +152,8 @@ zfs_dirent_lock(zfs_dirlock_t **dlpp, znode_t *dzp, char *name, znode_t **zpp,
 	 * Verify that we are not trying to lock '.', '..', or '.zfs'
 	 */
 	if (name[0] == '.' &&
-	    (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')) ||
-	    zfs_has_ctldir(dzp) && strcmp(name, ZFS_CTLDIR_NAME) == 0)
+	    (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'))/* ||
+	    zfs_has_ctldir(dzp) && strcmp(name, ZFS_CTLDIR_NAME) == 0 */)
 		return (EEXIST);
 
 	/*

@@ -442,6 +442,21 @@ zfs_unmount(zfs_handle_t *zhp, const char *mountpoint, int flags)
 		/* First check if there is a .zfs dir */
 		char ctldir[MAXPATHLEN];
 		struct mnttab entry_ctl;
+		// find temp clones (mounted snapshots)
+		sprintf(ctldir,"%s/snap_",zhp->zfs_name);
+		while (libzfs_mnttab_find_sub(hdl, ctldir, &entry_ctl) == 0) {
+		    /* Open the given dataset */
+		    zfs_handle_t *zhp;
+		    zfs_type_t type = ZFS_TYPE_DATASET;
+		    if ((zhp = zfs_open(hdl, entry_ctl.mnt_special, type)) == NULL) {
+			printf("could not opoen dataset\n");
+			break;
+		    }
+		    if (zfs_unmount(zhp, NULL, 0) != 0 ||
+			    zfs_destroy(zhp, 0) != 0)  {
+			zfs_close(zhp);
+		    }
+		}
 		sprintf(ctldir,"%s/.zfs",zhp->zfs_name);
 		if (libzfs_mnttab_find(hdl, ctldir, &entry_ctl) == 0) {
 		    if (unmount_one(hdl, ctldir, flags) == 0) 

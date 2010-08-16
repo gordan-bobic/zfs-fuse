@@ -684,6 +684,26 @@ libzfs_mnttab_find(libzfs_handle_t *hdl, const char *fsname,
 	return (ENOENT);
 }
 
+int
+libzfs_mnttab_find_sub(libzfs_handle_t *hdl, const char *fsname,
+    struct mnttab *entry)
+{
+	mnttab_node_t find;
+	mnttab_node_t *mtn;
+
+	struct mnttab srch = { 0 };
+
+	if (avl_numnodes(&hdl->libzfs_mnttab_cache))
+	    libzfs_mnttab_fini(hdl);
+	rewind(hdl->libzfs_mnttab);
+	srch.mnt_special = (char *)fsname;
+	srch.mnt_fstype = MNTTYPE_ZFS;
+	if (getmntsrc(hdl->libzfs_mnttab, entry, &srch) == 0)
+	    return (0);
+	else
+	    return (ENOENT);
+}
+
 void
 libzfs_mnttab_add(libzfs_handle_t *hdl, const char *special,
     const char *mountp, const char *mntopts)
