@@ -254,14 +254,14 @@ int do_init()
 
 void do_exit()
 {
-	if(listener_thread_started) {
-		exit_listener = B_TRUE;
-		if(pthread_join(listener_thread, NULL) != 0)
-			cmn_err(CE_WARN, "Error in pthread_join().");
-	}
-
 	zfsfuse_listener_exit();
-    cmd_listener_fini();
+	if(listener_thread_started) {
+	    printf("thread exit...\n");
+	    exit_listener = B_TRUE;
+	    if(pthread_join(listener_thread, NULL) != 0)
+		cmn_err(CE_WARN, "Error in pthread_join().");
+	}
+	cmd_listener_fini();
 
 	if(ioctl_fd != -1)
 		zfsfuse_socket_close(ioctl_fd);

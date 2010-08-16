@@ -673,29 +673,6 @@ zfsctl_create(zfsvfs_t *zfsvfs)
     char mt[PATH_MAX];
     if (get_mtpoint(zfsvfs,mt,PATH_MAX) == 0) 
 	fuse_setup_ctldir(zfsvfs,mt);
-    else
-	printf("didn't find mt\n");
-
-#if 0
-    vp = gfs_root_create(sizeof (zfsctl_node_t), zfsvfs->z_vfs,
-	    zfsctl_ops_root, ZFSCTL_INO_ROOT, zfsctl_root_entries,
-	    zfsctl_root_inode_cb, MAXNAMELEN, NULL, NULL);
-    zcp = vp->v_data;
-    zcp->zc_id = ZFSCTL_INO_ROOT;
-
-    VERIFY(VFS_ROOT(zfsvfs->z_vfs, &rvp) == 0);
-    ZFS_TIME_DECODE(&zcp->zc_cmtime, VTOZ(rvp)->z_phys->zp_crtime);
-    VN_RELE(rvp);
-
-    /*
-     * We're only faking the fact that we have a root of a filesystem for
-     * the sake of the GFS interfaces.  Undo the flag manipulation it did
-     * for us.
-     */
-    vp->v_flag &= ~(VROOT | VNOCACHE | VNOMAP | VNOSWAP | VNOMOUNT);
-
-    zfsvfs->z_ctldir = vp;
-#endif
 }
 	
 /*
@@ -1717,6 +1694,7 @@ zfsctl_umount_snapshots(vfs_t *vfsp, int fflags, cred_t *cr)
 	if (!strncmp(temp_snap[n],base,len)) {
 	    char cmd[4096];
 	    snprintf(cmd,4096,"zfs destroy %s",temp_snap[n]);
+	    printf("cmd to destroy snap : %s\n",cmd);
 	    int ret = system(cmd);
 	    printf("cmd %s returned %d\n",cmd,ret);
 	    free(temp_snap[n]);
@@ -1726,11 +1704,11 @@ zfsctl_umount_snapshots(vfs_t *vfsp, int fflags, cred_t *cr)
 	    n--;
 	}
     }
-    if (used_snap == 0 && temp_snap)
+    if (used_snap == 0 && temp_snap) {
 	free(temp_snap);
+	temp_snap = NULL;
+    }
     destroy_snaps = 0;
-    // sprintf(dir,"umount \"%s/.zfs\"",osname);
-    // system(dir);
     return 0;
 }
 
