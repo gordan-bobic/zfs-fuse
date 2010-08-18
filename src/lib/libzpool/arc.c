@@ -576,7 +576,7 @@ uint64_t l2arc_feed_min_ms = L2ARC_FEED_MIN_MS;	/* min interval milliseconds */
 boolean_t l2arc_noprefetch = B_TRUE;		/* don't cache prefetch bufs */
 boolean_t l2arc_feed_again = B_TRUE;		/* turbo warmup */
 boolean_t l2arc_norw = B_TRUE;			/* no reads during writes */
-uint64_t max_arc_size = 0;
+float max_arc_size = 0.0;
 
 /*
  * L2ARC Internals
@@ -1953,8 +1953,8 @@ arc_shrink(void)
 	if (arc_c > arc_c_min) {
 		uint64_t to_free;
 
-#if 0
-		to_free = MAX(arc_c >> arc_shrink_shift, ptob(needfree));
+#if 1
+		to_free = MAX(arc_c >> arc_shrink_shift, arc_size - arc_c);
 #else
 		to_free = arc_c >> arc_shrink_shift;
 #endif
@@ -1976,9 +1976,57 @@ arc_shrink(void)
 		arc_adjust();
 }
 
+static void
+arc_kmem_reap_now(arc_reclaim_strategy_t strat);
+
 static int
 arc_reclaim_needed(void)
 {
+    if (max_arc_size < 1.0 && max_arc_size > 1e-4) {
+	static int last_reclaim;
+	if (time(NULL)-last_reclaim < 10)
+	    return 0;
+	last_reclaim = time(NULL);
+	FILE *f = fopen("/proc/meminfo","r");
+	if (f) {
+	    char buf[80];
+	    char *name;
+	    long size,free=0,cache=0;
+	    while (!feof(f)) {
+		fgets(buf,80,f);
+		name = buf;
+		char *s = strchr(buf,':');
+		if (!s) continue;
+		*s = 0; // the name finishes here
+		do {
+		    s++;
+		} while (!(*s >= '0' && *s <= '9'));
+		size = atol(s);
+		if (!strcmp(name,"MemFree"))
+		    free = size;
+		else if (!strcmp(name,"Cached"))
+		    cache = size;
+		if (free && cache)
+		    break;
+	    }
+	    fclose(f);
+	    if (free && cache) {
+		long max = ((free+cache)*max_arc_size)*(1<<10);
+		if (abs(max-arc_c_max) > 1024*1024) {
+		    // minimum difference 1 Mb
+		    printf("adjusting max_arc_size, old %ld new %ld (free %ld + cache %ld)\n",arc_c_max,max,free,cache);
+		    arc_c = arc_c_max = max;
+		    if (arc_c < arc_size) {
+			arc_kmem_reap_now(ARC_RECLAIM_AGGR);
+			umem_reap();
+		    }
+		    return 0; 
+		}
+	    }
+	    return 0;
+	}
+	fclose(f);
+    }
 #if 0
 	uint64_t extra;
 
@@ -3452,7 +3500,7 @@ arc_init(void)
 	arc_c_min = 16<<20;
 	if (max_arc_size) {
 		if (max_arc_size < arc_c_min) {
-			syslog(LOG_WARNING,"max_arc_size too small (%" FI64 " bytes), using arc_c_min (%" FI64 " bytes)",max_arc_size,arc_c_min);
+			syslog(LOG_WARNING,"max_arc_size too small (%f bytes), using arc_c_min (%" FI64 " bytes)",max_arc_size,arc_c_min);
 			arc_c_max = arc_c_min;
 		} else {
 			arc_c_max = max_arc_size;

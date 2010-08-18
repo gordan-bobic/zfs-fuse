@@ -23,6 +23,7 @@
  * Use is subject to license terms.
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -38,7 +39,7 @@
 #include "zfs_operations.h"
 #include "format.h"
 
-extern uint64_t max_arc_size; // defined in arc.c
+extern float max_arc_size; // defined in arc.c
 static const char *cf_pidfile = NULL;
 static const char *cf_fuse_mount_options = NULL;
 static int cf_disable_block_cache = 0;
@@ -315,13 +316,14 @@ static void parse_args(int argc, char *argv[])
 				break;
 			case 'm':
 				check_opt(progname,"-m");
-				max_arc_size = strtol(optarg,&detecterror,10);
-				if ((max_arc_size == 0 && detecterror == optarg) || (max_arc_size < 16) || (max_arc_size > 16384)) {
-					fprintf(stderr, "%s: you need to specify a valid, in-range integer for the maximum ARC size\n\n", progname);
+				max_arc_size = strtof(optarg,&detecterror);
+				if ((fabsf(max_arc_size) < 1e-4 && detecterror == optarg) || (max_arc_size < 16.0 && max_arc_size > 0.9) || (max_arc_size > 16384.0)) {
+					fprintf(stderr, "%s: max-arc-size = ]0..0.9] || size in Mb\n\n", progname);
 					print_usage(argc, argv);
 					exit(64);
 				}
-				max_arc_size = max_arc_size<<20;
+				if (max_arc_size > 15.0)
+				    max_arc_size *= 1<<20; // convert to mb
 				break;
 			case 'u':
 				check_opt(progname,"-u");
@@ -436,7 +438,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s: Warning: enabling xattr support should only be done when really required; performance will be affected\n", argv[0]);
 
 	/* notice about ARC size */
-	if (max_arc_size)	syslog(LOG_NOTICE,"ARC caching: maximum ARC size: %" FU64 " MiB", max_arc_size>>20);
+	if (max_arc_size)	syslog(LOG_NOTICE,"ARC caching: maximum ARC size: %f MiB", max_arc_size*(1>>20));
 	else 			syslog(LOG_NOTICE,"ARC caching: maximum ARC size: compiled-in default");
 
 	if (!block_cache) /* direct IO enabled */
