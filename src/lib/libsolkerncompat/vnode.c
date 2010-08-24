@@ -1314,8 +1314,10 @@ root_write(vnode_t *vp, uio_t *uiop, int ioflag, cred_t *cr, caller_context_t *c
 		perror("pwrite64");
 	}
 
+#ifdef DEBUG
 	if(iolen != uiop->uio_iov->iov_len)
 		fprintf(stderr, "root_write(): len: %lli iolen: %lli offset: %lli file: %s\n", (longlong_t) uiop->uio_iov->iov_len, (longlong_t) iolen, (longlong_t) uiop->uio_loffset, vp->v_path);
+#endif
 
 	if(error)
 		return error;
