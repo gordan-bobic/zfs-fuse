@@ -273,6 +273,12 @@ static void zfsfuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	uio.uio_segflg = UIO_SYSSPACE;
 	uio.uio_fmode = 0;
 	uio.uio_llimit = RLIM64_INFINITY;
+	/* I have taken the values for this flag from the zfs sources.
+	 * Apprently it's UIO_COPY_CACHED for reads and UIO_COPY_DEFAULT for
+	 * writes, not sure it makes a big difference anyway.
+	 * But what is sure is that it must be initialized to avoid random
+	 * values */
+	uio.uio_extflg = UIO_COPY_CACHED;
 
 	int eofp = 0;
 
@@ -352,6 +358,7 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
     uio.uio_segflg = UIO_SYSSPACE;
     uio.uio_fmode = 0;
     uio.uio_llimit = RLIM64_INFINITY;
+    uio.uio_extflg = UIO_COPY_DEFAULT;
 
     iovec.iov_base = (void *) value;
     iovec.iov_len = size;
@@ -414,6 +421,7 @@ static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     uio.uio_segflg = UIO_SYSSPACE;
     uio.uio_fmode = 0;
     uio.uio_llimit = RLIM64_INFINITY;
+    uio.uio_extflg = UIO_COPY_CACHED;
 
     iovec.iov_base = buf;
     iovec.iov_len = vattr.va_size;
@@ -686,6 +694,7 @@ static int zfsfuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t of
 	uio.uio_segflg = UIO_SYSSPACE;
 	uio.uio_fmode = 0;
 	uio.uio_llimit = RLIM64_INFINITY;
+	uio.uio_extflg = UIO_COPY_CACHED;
 
 	int eofp = 0;
 
@@ -986,6 +995,7 @@ static int zfsfuse_readlink(fuse_req_t req, fuse_ino_t ino)
 	iovec.iov_len = sizeof(buffer) - 1;
 	uio.uio_resid = iovec.iov_len;
 	uio.uio_loffset = 0;
+	uio.uio_extflg = UIO_COPY_CACHED;
 
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
@@ -1037,8 +1047,9 @@ static int zfsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, 
 	uio.uio_iov = &iovec;
 	uio.uio_iovcnt = 1;
 	uio.uio_segflg = UIO_SYSSPACE;
-	uio.uio_fmode = 0;
+	uio.uio_fmode = FREAD;
 	uio.uio_llimit = RLIM64_INFINITY;
+	uio.uio_extflg = UIO_COPY_CACHED;
 
 	iovec.iov_base = outbuf;
 	iovec.iov_len = size;
@@ -1400,16 +1411,22 @@ static int zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t
 	uio.uio_iov = &iovec;
 	uio.uio_iovcnt = 1;
 	uio.uio_segflg = UIO_SYSSPACE;
-	uio.uio_fmode = 0;
+	uio.uio_fmode = FWRITE;
 	uio.uio_llimit = RLIM64_INFINITY;
 
 	iovec.iov_base = (void *) buf;
 	iovec.iov_len = size;
 	uio.uio_resid = iovec.iov_len;
 	uio.uio_loffset = off;
+	uio.uio_extflg = UIO_COPY_DEFAULT;
 
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
+/*
+	xuio_t xuio;
+	uio.uio_extflg = UIO_XUIO;
+	xuio.xu_uio = uio;
+	xuio.xu_type = UIOTYPE_ZEROCOPY; */
 
 	int error = VOP_WRITE(vp, &uio, info->flags, &cred, NULL);
 
@@ -1418,7 +1435,7 @@ static int zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t
 	if(!error) {
 		/* When not using direct_io, we must always write 'size' bytes */
 		VERIFY(uio.uio_resid == 0);
-		fuse_reply_write(req, size - uio.uio_resid);
+		fuse_reply_write(req, size /* - uio.uio_resid */);
 	}
 
 	return error;
