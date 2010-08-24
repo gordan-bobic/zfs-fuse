@@ -1998,6 +1998,8 @@ arc_reclaim_needed(void)
 		char *s = strchr(buf,':');
 		if (!s) continue;
 		*s = 0; // the name finishes here
+		if (strcmp(name,"MemFree") && strcmp(name,"Cached"))
+		    continue; // avoid useless conversions
 		do {
 		    s++;
 		} while (!(*s >= '0' && *s <= '9'));
@@ -2014,10 +2016,13 @@ arc_reclaim_needed(void)
 		long max = ((free+cache)*max_arc_size)*(1<<10);
 		if (abs(max-arc_c_max) > 1024*1024) {
 		    // minimum difference 1 Mb
-		    printf("adjusting max_arc_size, old %ld new %ld (free %ld + cache %ld)\n",arc_c_max,max,free,cache);
+		    // printf("adjusting max_arc_size, old %ld new %ld (free %ld + cache %ld)\n",arc_c_max,max,free,cache);
 		    arc_c = arc_c_max = max;
 		    if (arc_c < arc_size) {
 			arc_kmem_reap_now(ARC_RECLAIM_AGGR);
+			/* umem_reap is called by vmem_reap in zfs-fuse, but
+			 * only when an allocation fails !
+			 * It's much too late when there is no memory left */
 			umem_reap();
 		    }
 		    return 0; 
