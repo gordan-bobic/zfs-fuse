@@ -46,13 +46,17 @@
 #include "util.h"
 #include "fuse_listener.h"
 #include <syslog.h>
+#include <ulockmgr.h>
 
 // DEBUG_LEVEL : combination of:
 // 1 : functions calls
 // 2 : lookup
 // 4 : buffers
 // 8 : read and write calls
-// #define DEBUG_LEVEL (4 | 2 | 8)
+// 16: locks
+#define DEBUG_LEVEL (1 | 2 | 16)
+
+static int handle = 3;
 
 static struct {
 	file_info_t **info;
@@ -186,7 +190,7 @@ static void zfsfuse_statfs(fuse_req_t req, fuse_ino_t ino)
 	   f_frsize, so we must use that instead */
 	/* Still there with fuse 2.7.4 apparently (you get a size in To so it shows a lot !) */
 	stat.f_bsize = zfs_stat.f_frsize;
-	stat.f_frsize = zfs_stat.f_frsize;
+	stat.f_frsize = zfs_stat.f_bsize;
 	stat.f_blocks = zfs_stat.f_blocks;
 	stat.f_bfree = zfs_stat.f_bfree;
 	stat.f_bavail = zfs_stat.f_bavail;
@@ -197,7 +201,10 @@ static void zfsfuse_statfs(fuse_req_t req, fuse_ino_t ino)
 	stat.f_flag = zfs_stat.f_flag;
 	stat.f_namemax = zfs_stat.f_namemax;
 
-	fuse_reply_statfs(req, &stat);
+	ret = fuse_reply_statfs(req, &stat);
+	if (ret) {
+		print_debug(2,"statfs got error %d\n",ret);
+	}
 }
 
 static int zfs_enter(zfsvfs_t *zfsvfs) {
@@ -275,6 +282,7 @@ static int zfsfuse_stat(zfsvfs_t* zfsvfs, vnode_t *vp, struct stat *stbuf, cred_
 	TIMESTRUC_TO_TIME(vattr.va_atime, &stbuf->st_atime);
 	TIMESTRUC_TO_TIME(vattr.va_mtime, &stbuf->st_mtime);
 	TIMESTRUC_TO_TIME(vattr.va_ctime, &stbuf->st_ctime);
+	print_debug(2,"stat: ino %ld size %zd blksize %zd blocks %ld dev %ld rdev %ld\n",stbuf->st_ino,stbuf->st_size,stbuf->st_blksize,stbuf->st_blocks,vattr.va_fsid,vattr.va_rdev);
 
 	return 0;
 }
@@ -298,6 +306,7 @@ static int int_zfs_enter(zfsvfs_t *zfsvfs) {
 static void zfsfuse_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
     print_debug(1,"function %s\n",__FUNCTION__);
+	print_debug(2,"getattr: ino %ld\n",ino);
 	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);
 	zfsvfs_t *zfsvfs = vfs->vfs_data;
 	ino = FUSE2ZFS(ino, zfsvfs);
@@ -313,6 +322,7 @@ static void zfsfuse_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 	 if(error) {
 		/* If the inode we are trying to get was recently deleted
 		   dnode_hold_impl will return EEXIST instead of ENOENT */
+		 print_debug(2,"getattr: error on zget %d\n",error);
 		error = (error == EEXIST ? ENOENT : error);
 		goto out;
 	}
@@ -335,7 +345,10 @@ static void zfsfuse_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 		stbuf.st_size = info->last_off;
 	}
 
-	print_debug(2,"getattr: ino %ld got size %zd\n",ino,stbuf.st_size);
+	if (error) {
+		print_debug(2,"getattr got error %d on stat\n",error);
+	}
+	print_debug(2,"getattr: out ino %ld got size %zd\n",stbuf.st_ino,stbuf.st_size);
 
 	VN_RELE(vp);
 out:
@@ -616,6 +629,7 @@ static void zfsfuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		ZFS_EXIT(zfsvfs);
 		/* If the inode we are trying to get was recently deleted
 		   dnode_hold_impl will return EEXIST instead of ENOENT */
+		print_debug(2,"lookup %s got error %d on zget\n",name,error);
 		ERROR(error == EEXIST ? ENOENT : error);
 	}
 
@@ -637,6 +651,7 @@ static void zfsfuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	error = VOP_LOOKUP(dvp, (char *) name, &vp, NULL, 0, NULL, &cred, NULL, NULL, NULL);
 	if(error)
 	{
+		print_debug(2,"lookup %s got error %d on lookup\n",name,error);
 		if (error == ENOENT) {
 			error = 0;
 			e.ino = 0;
@@ -840,6 +855,19 @@ static void zfsfuse_flush(fuse_req_t req, fuse_ino_t ino,
 	ino = FUSE2ZFS(ino, zfsvfs);
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
+	if (fi->lock_owner) {
+		struct flock lock;
+		lock.l_type = F_UNLCK;
+		lock.l_whence = SEEK_SET;
+		lock.l_start = 0;
+		lock.l_len = 0; // whole file
+		const struct fuse_ctx *ctx = fuse_req_ctx(req);
+		fi->lock_owner = ctx->pid;
+		int ret = ulockmgr_op(handle, F_SETLK, &lock, &fi->lock_owner,
+				sizeof(fi->lock_owner));
+		print_debug(16,"flush ino %ld unlock owner %ld ret %d\n",ino,fi->lock_owner,ret);
+	}
+
 	if (info->used) {
 		print_debug(4,"flush: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
 		basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
@@ -848,6 +876,36 @@ static void zfsfuse_flush(fuse_req_t req, fuse_ino_t ino,
 		print_debug(4,"flush: no info for ino %ld\n",ino);
 	}
 	fuse_reply_err(req,0);
+}
+
+static void zfsfuse_getlk(fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi, struct flock *lock)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	fi->lock_owner = ctx->pid;
+	
+	int ret = ulockmgr_op(handle, F_GETFL, lock, &fi->lock_owner,
+			   sizeof(fi->lock_owner));
+	print_debug(16,"getlk ino %ld unlock owner %ld ret %d\n",ino,fi->lock_owner,ret);
+	if (ret)
+		fuse_reply_err(req,-ret);
+	else
+		fuse_reply_lock(req,lock);
+}
+
+static void zfsfuse_setlk(fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi,
+			   struct flock *lock, int sleep)
+{
+	// if we use F_SETLKW when sleep != 0, then this thread will really wait
+	// which is probably not a good idea at all in zfs-fuse, so I'll try to
+	// use F_SETLK always...
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	fi->lock_owner = ctx->pid;
+	int ret = ulockmgr_op(handle, F_SETLK, lock, &fi->lock_owner,
+			   sizeof(fi->lock_owner));
+	print_debug(16,"setlk ino %ld handle %d lock owner %ld sleep %d ret %d\n",ino,handle,fi->lock_owner,sleep,ret);
+	fuse_reply_err(req,-ret);
 }
 
 static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, int fflags, mode_t createmode, const char *name)
@@ -995,6 +1053,7 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 	 * Be sure to remount a fs if you rollback a snapshot on it */
 	fi->keep_cache = 1;
 	fi->direct_io = block_cache ? 0 : 1;
+	handle++;
 
 	if(flags & FCREAT) {
 		e.attr_timeout = fuse_attr_timeout;
@@ -1413,6 +1472,7 @@ static void zfsfuse_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 		free_info(info);
 		free(info->buffer);
 	}
+	handle--;
 	release_common(req,ino,fi);
 }
 
@@ -1940,6 +2000,8 @@ struct fuse_lowlevel_ops zfs_operations =
 	.statfs     = zfsfuse_statfs,
 	.destroy    = zfsfuse_destroy,
 	.flush	    = zfsfuse_flush,
+	.getlk		= zfsfuse_getlk,
+	.setlk		= zfsfuse_setlk,
 };
 
 void init_xattr() {
