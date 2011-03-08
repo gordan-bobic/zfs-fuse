@@ -521,9 +521,13 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 			if (!acl_equiv_mode(acl,&mode)) {
 				printf("got equiv mode %x\n",mode);
 				vattr_t vattr = { 0 };
+				vattr.va_mask = AT_STAT;
+
+				int error = VOP_GETATTR(dvp, &vattr, 0, &cred, NULL);
 
 				vattr.va_mask = AT_MODE;
-				vattr.va_mode = mode;
+				vattr.va_mode &= 07000;
+				vattr.va_mode |= mode;
 				error = VOP_SETATTR(dvp, &vattr, 0, &cred, NULL);
 				if (!error) {
 					printf("setattr ok\n");
