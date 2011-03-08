@@ -38,7 +38,7 @@
 #include <sys/vfs.h>
 #include <sys/vnode.h>
 #include <vm/page.h>
-#include <sys/acl.h>
+#include <sys/aclace.h>
 #include <sys/share.h>
 #include <sys/flock.h>
 

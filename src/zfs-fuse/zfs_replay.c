@@ -42,7 +42,7 @@
 #include <sys/byteorder.h>
 #include <sys/stat.h>
 #include <sys/mode.h>
-#include <sys/acl.h>
+#include <sys/aclace.h>
 #include <sys/atomic.h>
 #include <sys/cred.h>
 

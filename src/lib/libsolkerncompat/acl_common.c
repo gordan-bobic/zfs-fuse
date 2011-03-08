@@ -261,52 +261,6 @@ cacl_free(void *ptr, size_t size)
 #endif
 }
 
-acl_t *
-acl_alloc(enum acl_type type)
-{
-	acl_t *aclp;
-
-	if (cacl_malloc((void **)&aclp, sizeof (acl_t)) != 0)
-		return (NULL);
-
-	aclp->acl_aclp = NULL;
-	aclp->acl_cnt = 0;
-
-	switch (type) {
-	case ACE_T:
-		aclp->acl_type = ACE_T;
-		aclp->acl_entry_size = sizeof (ace_t);
-		break;
-	case ACLENT_T:
-		aclp->acl_type = ACLENT_T;
-		aclp->acl_entry_size = sizeof (aclent_t);
-		break;
-	default:
-		acl_free(aclp);
-		aclp = NULL;
-	}
-	return (aclp);
-}
-
-/*
- * Free acl_t structure
- */
-void
-acl_free(acl_t *aclp)
-{
-	int acl_size;
-
-	if (aclp == NULL)
-		return;
-
-	if (aclp->acl_aclp) {
-		acl_size = aclp->acl_cnt * aclp->acl_entry_size;
-		cacl_free(aclp->acl_aclp, acl_size);
-	}
-
-	cacl_free(aclp, sizeof (acl_t));
-}
-
 static uint32_t
 access_mask_set(int haswriteperm, int hasreadperm, int isowner, int isallow)
 {

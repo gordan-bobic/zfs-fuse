@@ -29,7 +29,7 @@
 #include <sys/isa_defs.h>
 #include <sys/types32.h>
 #endif
-#include <sys/acl.h>
+#include <sys/aclace.h>
 #include <sys/dmu.h>
 #include <sys/zfs_fuid.h>
 #include <sys/sa.h>

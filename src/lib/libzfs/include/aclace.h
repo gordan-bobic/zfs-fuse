@@ -47,8 +47,6 @@ typedef struct ace {
 	uint16_t	a_type;		/* allow or deny */
 } ace_t;
 
-typedef struct acl_info acl_t;
-
 /*
  * The following are Defined types for an aclent_t.
  */
@@ -269,16 +267,8 @@ extern int aclfrommode(aclent_t *, int, mode_t *);
 extern int aclsort(int, int, aclent_t *);
 extern char *acltotext(aclent_t *, int);
 extern aclent_t *aclfromtext(char *, int *);
-extern void acl_free(acl_t *);
-extern int acl_get(const char *, int, acl_t **);
-extern int facl_get(int, int, acl_t **);
-extern int acl_set(const char *, acl_t *acl);
-extern int facl_set(int, acl_t *acl);
 extern int acl_strip(const char *, uid_t, gid_t, mode_t);
 extern int acl_trivial(const char *);
-extern char *acl_totext(acl_t *, int);
-extern int acl_fromtext(const char *, acl_t **);
-extern int acl_check(acl_t *, int);
 
 #else	/* !defined(_KERNEL) */
 

@@ -27,7 +27,6 @@
 #define	_ACLUTILS_H
 
 #include <sys/types.h>
-#include <sys/acl.h>
 #include <strings.h>
 #include <locale.h>
 #include <ctype.h>

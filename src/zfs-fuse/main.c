@@ -174,7 +174,7 @@ void print_usage(int argc, char *argv[]) {
 	const char *progname = "zfs-fuse";
 	if (argc > 0)
 		progname = argv[0];
-	fprintf(stderr,
+	printf(
 		"Usage: %s [OPTION]...\n"
 		"Start the ZFS daemon.\n"
 		"\n"
@@ -227,6 +227,9 @@ void print_usage(int argc, char *argv[]) {
 		"			performance penalty for many small IOPS\n"
 		"  -h, --help\n"
 		"			Show this usage summary.\n"
+		"  -no-buffers\n"
+		"			Disable buffers for writing. No reason to do that except\n"
+		"			if you suspect a bug in the buffers handling.\n"
 		, progname);
 }
 

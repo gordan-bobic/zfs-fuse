@@ -39,7 +39,7 @@
 #include <sys/policy.h>
 #include <sys/stat.h>
 #include <sys/mode.h>
-#include <sys/acl.h>
+#include <sys/aclace.h>
 #include <sys/dmu.h>
 #include <sys/spa.h>
 #include <sys/zfs_fuid.h>

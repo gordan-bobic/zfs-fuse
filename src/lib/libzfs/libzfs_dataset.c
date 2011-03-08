@@ -40,7 +40,6 @@
 #include <pwd.h>
 #include <grp.h>
 #include <ucred.h>
-#include <aclutils.h>
 #include <acl_impl.h>
 
 #include <sys/dnode.h>
