@@ -46,13 +46,15 @@
 #include "util.h"
 #include "fuse_listener.h"
 #include <syslog.h>
+#include <sys/acl.h>
+#include <acl/libacl.h>
 
 // DEBUG_LEVEL : combination of:
 // 1 : functions calls
 // 2 : lookup
 // 4 : buffers
 // 8 : read and write calls
-// #define DEBUG_LEVEL (4 | 2 | 8)
+#define DEBUG_LEVEL (1)
 
 static struct {
 	file_info_t **info;
@@ -383,6 +385,7 @@ out:
 
 static void zfsfuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
+    print_debug(1,"function %s\n",__FUNCTION__);
 	union {
 		char buf[DIRENT64_RECLEN(MAXNAMELEN)];
 		struct dirent64 dirent;
@@ -467,6 +470,7 @@ out:
 
 static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags)
 {
+    print_debug(1,"function %s %s=%s\n",__FUNCTION__,name,value);
     MY_LOOKUP_XATTR();
     // Now the idea is to create a file inside the xattr directory with the
     // wanted attribute.
@@ -505,6 +509,34 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
     if (error) goto out;
     error = VOP_CLOSE(vp, FWRITE, 1, (offset_t) 0, &cred, NULL);
 
+	if (!strcmp(name,"system.posix_acl_access")) {
+		extern acl_t
+			__acl_from_xattr(const char *ext_acl_p, size_t size);
+		acl_t acl = __acl_from_xattr(value,size);
+		if (acl) {
+			printf("got an acl from an xattr\n");
+			mode_t mode;
+			if (!acl_equiv_mode(acl,&mode)) {
+				printf("got equiv mode %x\n",mode);
+				vattr_t vattr = { 0 };
+
+				vattr.va_mask = AT_MODE;
+				vattr.va_mode = mode;
+				error = VOP_SETATTR(dvp, &vattr, 0, &cred, NULL);
+				if (!error) {
+					printf("setattr ok\n");
+					fuse_lowlevel_notify_inval_inode(vfs->fuse_chan, 
+							ZFS2FUSE(ino,zfsvfs), -1, 0); // invalidate attributes
+				} else
+					perror("setattr");
+			}
+
+			acl_free(acl);
+		} else {
+			printf("acl conversion failure\n");
+		}
+	}
+
 out:
     if(vp != NULL)
 	VN_RELE(vp);
@@ -517,6 +549,7 @@ out:
 static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	size_t size)
 {
+    print_debug(1,"function %s\n",__FUNCTION__);
     MY_LOOKUP_XATTR();
     vnode_t *new_vp = NULL;
     error = VOP_LOOKUP(vp, (char *) name, &new_vp, NULL, 0, NULL, &cred, NULL, NULL, NULL);  
@@ -584,6 +617,7 @@ out:
 
 static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
+    print_debug(1,"function %s\n",__FUNCTION__);
     MY_LOOKUP_XATTR();
     error = VOP_REMOVE(vp, (char *) name, &cred, NULL, 0);
 
