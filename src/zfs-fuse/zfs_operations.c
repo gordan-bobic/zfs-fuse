@@ -468,6 +468,8 @@ out:
 	fuse_reply_err(req,error);
 }
 
+static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name);
+
 static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags)
 {
     print_debug(1,"function %s %s=%s\n",__FUNCTION__,name,value);
@@ -543,7 +545,10 @@ out:
     VN_RELE(dvp);
     ZFS_EXIT(zfsvfs);
 	// The fuse_reply_err at the end seems to be an mandatory even if there is no error
-    fuse_reply_err(req,error);
+	if (!error && cf_enable_xattr) 
+		zfsfuse_removexattr(req,ino,"system.posix_acl_access");
+	else
+		fuse_reply_err(req,error);
 }
 
 static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
