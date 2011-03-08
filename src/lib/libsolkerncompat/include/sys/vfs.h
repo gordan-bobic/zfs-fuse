@@ -54,6 +54,7 @@ typedef struct vfs {
 	uint_t        vfs_count;
 	refstr_t     *vfs_resource;
 	int	      fuse_attribute;
+	void	    *fuse_chan; // in void* to avoid to include fuse here
 } vfs_t;
 
 /*

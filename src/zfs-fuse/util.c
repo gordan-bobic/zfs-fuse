@@ -385,6 +385,7 @@ int do_mount(char *spec, char *dir, int mflag, char *opt)
 
 	if (has_default_perm)
 	    vfs->fuse_attribute = FUSE_VFS_HAS_DEFAULT_PERM;
+	vfs->fuse_chan = ch; // required by fuse_lowlevel_inval_inode
 
 	struct fuse_session *se = fuse_lowlevel_new(&args, &zfs_operations, sizeof(zfs_operations), vfs);
 	fuse_opt_free_args(&args);
