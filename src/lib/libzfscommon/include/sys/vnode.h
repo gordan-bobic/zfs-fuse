@@ -327,6 +327,7 @@ enum create { CRCREAT, CRMKNOD, CRMKDIR }; /* reason for create */
 #define ATTR_REAL       0x10    /* yield attributes of the real vp */
 #define ATTR_NOACLCHECK 0x20    /* Don't check ACL when checking permissions */
 #define ATTR_TRIGGER    0x40    /* Mount first if vnode is a trigger mount */
+#define ATTR_NOCTIME    0x80    /* no ctime update, for posix acls */
 
 /* Vnode Events - Used by VOP_VNEVENT */
 typedef enum vnevent	{

@@ -3121,16 +3121,18 @@ top:
 		zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime,
 		    B_TRUE);
 	} else if (mask != 0) {
-		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
-		    &ctime, sizeof (ctime));
-		zfs_tstamp_update_setup(zp, STATE_CHANGED, mtime, ctime,
-		    B_TRUE);
-		if (attrzp) {
-			SA_ADD_BULK_ATTR(xattr_bulk, xattr_count,
-			    SA_ZPL_CTIME(zfsvfs), NULL,
-			    &ctime, sizeof (ctime));
-			zfs_tstamp_update_setup(attrzp, STATE_CHANGED,
-			    mtime, ctime, B_TRUE);
+		if (!(flags & ATTR_NOCTIME)) {
+			SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
+					&ctime, sizeof (ctime));
+			zfs_tstamp_update_setup(zp, STATE_CHANGED, mtime, ctime,
+					B_TRUE);
+			if (attrzp) {
+				SA_ADD_BULK_ATTR(xattr_bulk, xattr_count,
+						SA_ZPL_CTIME(zfsvfs), NULL,
+						&ctime, sizeof (ctime));
+				zfs_tstamp_update_setup(attrzp, STATE_CHANGED,
+						mtime, ctime, B_TRUE);
+			}
 		}
 	}
 	/*

@@ -1230,8 +1230,9 @@ zfs_aclset_common(znode_t *zp, zfs_acl_t *aclp, cred_t *cr, dmu_tx_t *tx)
 	    &mode, sizeof (mode));
 	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs), NULL,
 	    &zp->z_pflags, sizeof (zp->z_pflags));
-	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
-	    &ctime, sizeof (ctime));
+	// zfs-fuse : no ctime update for acls
+//	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
+//	    &ctime, sizeof (ctime));
 
 	if (zp->z_acl_cached) {
 		zfs_acl_free(zp->z_acl_cached);
@@ -1356,7 +1357,8 @@ zfs_aclset_common(znode_t *zp, zfs_acl_t *aclp, cred_t *cr, dmu_tx_t *tx)
 	if (ace_trivial_common(aclp, 0, zfs_ace_walk) == 0)
 		zp->z_pflags |= ZFS_ACL_TRIVIAL;
 
-	zfs_tstamp_update_setup(zp, STATE_CHANGED, NULL, ctime, B_TRUE);
+	// zfs-fuse : from fstest-2009 an acl does not change ctime, thanks.
+	// zfs_tstamp_update_setup(zp, STATE_CHANGED, NULL, ctime, B_TRUE);
 	return (sa_bulk_update(zp->z_sa_hdl, bulk, count, tx));
 }
 

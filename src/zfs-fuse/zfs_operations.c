@@ -528,7 +528,8 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 				vattr.va_mask = AT_MODE;
 				vattr.va_mode &= 07000;
 				vattr.va_mode |= mode;
-				error = VOP_SETATTR(dvp, &vattr, 0, &cred, NULL);
+				error = VOP_SETATTR(dvp, &vattr, ATTR_NOACLCHECK|ATTR_NOCTIME,
+					   	&cred, NULL);
 				if (!error) {
 					printf("setattr ok\n");
 					fuse_lowlevel_notify_inval_inode(vfs->fuse_chan, 
@@ -549,10 +550,7 @@ out:
     VN_RELE(dvp);
     ZFS_EXIT(zfsvfs);
 	// The fuse_reply_err at the end seems to be an mandatory even if there is no error
-	if (!error && cf_enable_xattr) 
-		zfsfuse_removexattr(req,ino,"system.posix_acl_access");
-	else
-		fuse_reply_err(req,error);
+	fuse_reply_err(req,error);
 }
 
 static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
@@ -624,20 +622,54 @@ out:
 	fuse_reply_err(req,error);
 }
 
-static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
+static int raw_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name )
 {
-    print_debug(1,"function %s\n",__FUNCTION__);
-    MY_LOOKUP_XATTR();
-    error = VOP_REMOVE(vp, (char *) name, &cred, NULL, 0);
+	print_debug(1,"function %s\n",__FUNCTION__);
+	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		
+	zfsvfs_t *zfsvfs = vfs->vfs_data;				
+	ino = FUSE2ZFS(ino, zfsvfs);					
+
+	znode_t *znode;						
+
+	int error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);		
+	if(error) {							
+		return error;							
+	}								
+
+	ASSERT(znode != NULL);					
+	vnode_t *dvp = ZTOV(znode);					
+	ASSERT(dvp != NULL);					
+
+	vnode_t *vp = NULL;						
+
+	cred_t cred;						
+	zfsfuse_getcred(req, &cred);				
+
+	error = VOP_LOOKUP(dvp, "", &vp, NULL, LOOKUP_XATTR |	
+			CREATE_XATTR_DIR, NULL, &cred, NULL, NULL, NULL);	
+	if(error || vp == NULL) {					
+		if (error != EACCES) error = ENOSYS; 			
+		goto out;						
+	}
+	error = VOP_REMOVE(vp, (char *) name, &cred, NULL, 0);
 
 out:
-    if(vp != NULL)
-	VN_RELE(vp);
-    VN_RELE(dvp);
-    ZFS_EXIT(zfsvfs);
+	if(vp != NULL)
+		VN_RELE(vp);
+	VN_RELE(dvp);
+	return error;
+}
+
+static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
+{
+	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		
+	zfsvfs_t *zfsvfs = vfs->vfs_data;				
+	ZFS_VOID_ENTER(zfsvfs);
+	error = raw_removexattr(req,ino,name);
+	ZFS_EXIT(zfsvfs);
 	if (error == ENOENT)
 		error = ENOATTR;
-    fuse_reply_err(req,error);
+	fuse_reply_err(req,error);
 }
 
 static void zfsfuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
@@ -1361,12 +1393,13 @@ out: ;
 	if(release)
 		VN_RELE(vp);
 
-	ZFS_EXIT(zfsvfs);
-
-	if(!error)
+	if(!error) {
+		if (vattr.va_mask & AT_MODE && cf_enable_xattr)
+			raw_removexattr(req,ino,"system.posix_acl_access");
 		fuse_reply_attr(req, &stat_reply, fuse_attr_timeout);
-	else
+	} else
 		fuse_reply_err(req, error);
+	ZFS_EXIT(zfsvfs);
 }
 
 static void zfsfuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
