@@ -54,7 +54,8 @@
 // 2 : lookup
 // 4 : buffers
 // 8 : read and write calls
-#define DEBUG_LEVEL (1)
+// 16: acls
+#define DEBUG_LEVEL (1|16)
 
 static struct {
 	file_info_t **info;
@@ -516,31 +517,32 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 			__acl_from_xattr(const char *ext_acl_p, size_t size);
 		acl_t acl = __acl_from_xattr(value,size);
 		if (acl) {
-			printf("got an acl from an xattr\n");
-			mode_t mode;
-			if (!acl_equiv_mode(acl,&mode)) {
-				printf("got equiv mode %x\n",mode);
-				vattr_t vattr = { 0 };
-				vattr.va_mask = AT_STAT;
+			print_debug(16,"got an acl from an xattr\n");
+			mode_t mode = 0;
+			// Even if the returned acl is not strictly equivalent to the
+			// mode, it's still the mode which should be set in this case...
+			acl_equiv_mode(acl,&mode);
+			print_debug(16,"got equiv mode %o\n",mode);
+			vattr_t vattr = { 0 };
+			vattr.va_mask = AT_STAT;
 
-				int error = VOP_GETATTR(dvp, &vattr, 0, &cred, NULL);
+			int error = VOP_GETATTR(dvp, &vattr, 0, &cred, NULL);
 
-				vattr.va_mask = AT_MODE;
-				vattr.va_mode &= 07000;
-				vattr.va_mode |= mode;
-				error = VOP_SETATTR(dvp, &vattr, ATTR_NOACLCHECK|ATTR_NOCTIME,
-					   	&cred, NULL);
-				if (!error) {
-					printf("setattr ok\n");
-					fuse_lowlevel_notify_inval_inode(vfs->fuse_chan, 
-							ZFS2FUSE(ino,zfsvfs), -1, 0); // invalidate attributes
-				} else
-					perror("setattr");
-			}
+			vattr.va_mask = AT_MODE;
+			vattr.va_mode &= 07000;
+			vattr.va_mode |= mode;
+			error = VOP_SETATTR(dvp, &vattr, ATTR_NOACLCHECK|ATTR_NOCTIME,
+					&cred, NULL);
+			if (!error) {
+				print_debug(16,"setattr ok clearing attrib cache\n");
+				fuse_lowlevel_notify_inval_inode(vfs->fuse_chan, 
+						ZFS2FUSE(ino,zfsvfs), -1, 0); // invalidate attributes
+			} else
+				perror("setattr");
 
 			acl_free(acl);
 		} else {
-			printf("acl conversion failure\n");
+			print_debug(16,"acl conversion failure\n");
 		}
 	}
 
