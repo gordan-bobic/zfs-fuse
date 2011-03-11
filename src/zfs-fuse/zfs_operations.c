@@ -57,6 +57,23 @@
 // 16: acls
 #define DEBUG_LEVEL (1|16)
 
+extern acl_t
+__acl_from_xattr(const char *ext_acl_p, size_t size);
+struct acl_obj_tag;
+typedef struct acl_obj_tag acl_obj;
+extern char *
+__acl_to_xattr(const acl_obj *acl_obj_p, size_t *size);
+/* __ext2int_and_check is hidden !
+ * This is really becoming crazy.
+ * So I need to copy obj_prefix here and have a minimum replacement then */
+typedef struct {
+        unsigned long           p_magic:16;
+        unsigned long           p_flags:16;
+} obj_prefix;
+static void *__ext2int(void *ext_p ) {
+	return ((obj_prefix *)ext_p)-1;
+}
+
 static struct {
 	file_info_t **info;
 	int alloc,used;
@@ -469,7 +486,31 @@ out:
 	fuse_reply_err(req,error);
 }
 
-static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name);
+static int raw_setxattr(vnode_t **vp, const char *value, size_t size, cred_t *cred)
+{
+    int error = VOP_OPEN(vp, FWRITE, cred, NULL);
+    if (error) goto out;
+
+    iovec_t iovec;
+    uio_t uio;
+    uio.uio_iov = &iovec;
+    uio.uio_iovcnt = 1;
+    uio.uio_segflg = UIO_SYSSPACE;
+    uio.uio_fmode = 0;
+    uio.uio_llimit = RLIM64_INFINITY;
+    uio.uio_extflg = UIO_COPY_DEFAULT;
+
+    iovec.iov_base = (void *) value;
+    iovec.iov_len = size;
+    uio.uio_resid = iovec.iov_len;
+    uio.uio_loffset = 0;
+
+    error = VOP_WRITE(*vp, &uio, FWRITE, cred, NULL);
+    if (error) goto out;
+    error = VOP_CLOSE(*vp, FWRITE, 1, (offset_t) 0, cred, NULL);
+out:
+	return error;
+}
 
 static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags)
 {
@@ -491,30 +532,10 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 
     VN_RELE(vp);
     vp = new_vp;
-    error = VOP_OPEN(&vp, FWRITE, &cred, NULL);
-    if (error) goto out;
-
-    iovec_t iovec;
-    uio_t uio;
-    uio.uio_iov = &iovec;
-    uio.uio_iovcnt = 1;
-    uio.uio_segflg = UIO_SYSSPACE;
-    uio.uio_fmode = 0;
-    uio.uio_llimit = RLIM64_INFINITY;
-    uio.uio_extflg = UIO_COPY_DEFAULT;
-
-    iovec.iov_base = (void *) value;
-    iovec.iov_len = size;
-    uio.uio_resid = iovec.iov_len;
-    uio.uio_loffset = 0;
-
-    error = VOP_WRITE(vp, &uio, FWRITE, &cred, NULL);
-    if (error) goto out;
-    error = VOP_CLOSE(vp, FWRITE, 1, (offset_t) 0, &cred, NULL);
+	error = raw_setxattr(&vp,value,size,&cred);
+	if (error) goto out;
 
 	if (!strcmp(name,"system.posix_acl_access")) {
-		extern acl_t
-			__acl_from_xattr(const char *ext_acl_p, size_t size);
 		acl_t acl = __acl_from_xattr(value,size);
 		if (acl) {
 			print_debug(16,"got an acl from an xattr\n");
@@ -555,41 +576,124 @@ out:
 	fuse_reply_err(req,error);
 }
 
+static int raw_getxattr(zfsvfs_t *zfsvfs, fuse_ino_t ino, const char *name, 
+	   vnode_t **new_vp, cred_t *cred	)
+{
+	print_debug(1,"function %s\n",__FUNCTION__);
+
+	znode_t *znode;						
+
+	int error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);		
+	if(error) {							
+		return error;							
+	}								
+
+	ASSERT(znode != NULL);					
+	vnode_t *dvp = ZTOV(znode);					
+	ASSERT(dvp != NULL);					
+
+	vnode_t *vp = NULL;						
+
+	error = VOP_LOOKUP(dvp, "", &vp, NULL, LOOKUP_XATTR |	
+			CREATE_XATTR_DIR, NULL, cred, NULL, NULL, NULL);	
+	if(error || vp == NULL) {					
+		if (error != EACCES) error = ENOSYS; 			
+		goto out;						
+	}
+    *new_vp = NULL;
+    error = VOP_LOOKUP(vp, (char *) name, new_vp, NULL, 0, NULL, cred, NULL, NULL, NULL);  
+	if (error) {
+		error = ENOATTR;
+		goto out;
+    }
+
+out:
+	if(vp != NULL)
+		VN_RELE(vp);
+	VN_RELE(dvp);
+	return error;
+}
+
+static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t **new_vp,
+		cred_t *cred)
+{
+	int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_access", new_vp,
+			cred);
+	if (error) return NULL;
+    vattr_t vattr;
+
+    error = VOP_GETATTR(*new_vp, &vattr, ATTR_NOACLCHECK, cred, NULL);
+    if (error) goto out;
+    char *buf = malloc(vattr.va_size);
+    if (!buf)
+		goto out;
+    error = VOP_OPEN(new_vp, FREAD, cred, NULL);
+    if (error) {
+		free(buf);
+		goto out;
+    }
+
+    iovec_t iovec;
+    uio_t uio;
+    uio.uio_iov = &iovec;
+    uio.uio_iovcnt = 1;
+    uio.uio_segflg = UIO_SYSSPACE;
+    uio.uio_fmode = 0;
+    uio.uio_llimit = RLIM64_INFINITY;
+    uio.uio_extflg = UIO_COPY_CACHED;
+
+    iovec.iov_base = buf;
+    iovec.iov_len = vattr.va_size;
+    uio.uio_resid = iovec.iov_len;
+    uio.uio_loffset = 0;
+
+    error = VOP_READ(*new_vp, &uio, FREAD, cred, NULL);
+	if (error) {
+		free(buf);
+		goto out;
+	}
+    error = VOP_CLOSE(*new_vp, FREAD, 1, (offset_t) 0, cred, NULL);
+	acl_t acl = __acl_from_xattr(buf,vattr.va_size);
+	free(buf);
+	return acl;
+out:
+	VN_RELE(*new_vp);
+	return NULL;
+}
+
 static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	size_t size)
 {
     print_debug(1,"function %s\n",__FUNCTION__);
-    MY_LOOKUP_XATTR();
-    vnode_t *new_vp = NULL;
-    error = VOP_LOOKUP(vp, (char *) name, &new_vp, NULL, 0, NULL, &cred, NULL, NULL, NULL);  
-    if (error) {
-	error = ENOATTR;
-	goto out;
-    }
-    VN_RELE(vp);
-    vp = new_vp;
+	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		
+	zfsvfs_t *zfsvfs = vfs->vfs_data;				
+	ino = FUSE2ZFS(ino, zfsvfs);					
+	ZFS_VOID_ENTER(zfsvfs);
+	vnode_t *vp;
+	cred_t cred;
+	zfsfuse_getcred(req, &cred);				
+	error = raw_getxattr(zfsvfs, ino, name, &vp, &cred);
+	if (error) goto out;
     vattr_t vattr;
-    vattr.va_mask = AT_STAT | AT_NBLOCKS | AT_BLKSIZE | AT_SIZE;
 
-    // We are obliged to get the size 1st because of the stupid handling of the
-    // size parameter
-    error = VOP_GETATTR(vp, &vattr, 0, &cred, NULL);
+    error = VOP_GETATTR(vp, &vattr, ATTR_NOACLCHECK, &cred, NULL);
     if (error) goto out;
+
     if (size == 0) {
-	fuse_reply_xattr(req,vattr.va_size);
-	goto out;
+		fuse_reply_xattr(req,vattr.va_size);
+		goto out;
     } else if (size < vattr.va_size) {
-	fuse_reply_xattr(req, ERANGE);
-	goto out;
+		fuse_reply_err(req, ERANGE);
+		goto out;
     }
     char *buf = malloc(vattr.va_size);
     if (!buf)
-	goto out;
+		goto out;
 
     error = VOP_OPEN(&vp, FREAD, &cred, NULL);
     if (error) {
-	free(buf);
-	goto out;
+		free(buf);
+		goto out;
     }
 
     iovec_t iovec;
@@ -607,71 +711,35 @@ static void zfsfuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     uio.uio_loffset = 0;
 
     error = VOP_READ(vp, &uio, FREAD, &cred, NULL);
-    if (error) {
-	free(buf);
-	goto out;
-    }
+	if (error) {
+		free(buf);
+		goto out;
+	}
     fuse_reply_buf(req,buf,vattr.va_size);
     free(buf);
     error = VOP_CLOSE(vp, FREAD, 1, (offset_t) 0, &cred, NULL);
 
 out:
     if(vp != NULL)
-	VN_RELE(vp);
-    VN_RELE(dvp);
+		VN_RELE(vp);
     ZFS_EXIT(zfsvfs);
     if (error)
 	fuse_reply_err(req,error);
 }
 
-static int raw_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name )
-{
-	print_debug(1,"function %s\n",__FUNCTION__);
-	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		
-	zfsvfs_t *zfsvfs = vfs->vfs_data;				
-	ino = FUSE2ZFS(ino, zfsvfs);					
-
-	znode_t *znode;						
-
-	int error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);		
-	if(error) {							
-		return error;							
-	}								
-
-	ASSERT(znode != NULL);					
-	vnode_t *dvp = ZTOV(znode);					
-	ASSERT(dvp != NULL);					
-
-	vnode_t *vp = NULL;						
-
-	cred_t cred;						
-	zfsfuse_getcred(req, &cred);				
-
-	error = VOP_LOOKUP(dvp, "", &vp, NULL, LOOKUP_XATTR |	
-			CREATE_XATTR_DIR, NULL, &cred, NULL, NULL, NULL);	
-	if(error || vp == NULL) {					
-		if (error != EACCES) error = ENOSYS; 			
-		goto out;						
-	}
-	error = VOP_REMOVE(vp, (char *) name, &cred, NULL, 0);
-
-out:
-	if(vp != NULL)
-		VN_RELE(vp);
-	VN_RELE(dvp);
-	return error;
-}
-
 static void zfsfuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
-	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		
-	zfsvfs_t *zfsvfs = vfs->vfs_data;				
-	ZFS_VOID_ENTER(zfsvfs);
-	error = raw_removexattr(req,ino,name);
-	ZFS_EXIT(zfsvfs);
+    MY_LOOKUP_XATTR();
+    error = VOP_REMOVE(vp, (char *) name, &cred, NULL, 0);
+
+out:
+    if(vp != NULL)
+	VN_RELE(vp);
+    VN_RELE(dvp);
+    ZFS_EXIT(zfsvfs);
 	if (error == ENOENT)
 		error = ENOATTR;
-	fuse_reply_err(req,error);
+    fuse_reply_err(req,error);
 }
 
 static void zfsfuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
@@ -1396,8 +1464,50 @@ out: ;
 		VN_RELE(vp);
 
 	if(!error) {
-		if (vattr.va_mask & AT_MODE && cf_enable_xattr)
-			raw_removexattr(req,ino,"system.posix_acl_access");
+		if (vattr.va_mask & AT_MODE && cf_enable_xattr) {
+			acl_t acl = zfsfuse_getacl(zfsvfs, ino, &vp, &cred);
+			if (acl) {
+				acl_entry_t entry;
+				if (acl_get_entry(acl,ACL_FIRST_ENTRY,&entry)) {
+					acl_permset_t perm;
+					int user = (attr->st_mode>>6) & 7,
+						group = (attr->st_mode>>3)& 7,
+						other = (attr->st_mode&7);
+					acl_entry_t group_e;
+					int has_mask = 0;
+
+					do {
+						acl_tag_t tag;
+						acl_get_tag_type(entry,&tag);
+						acl_get_permset(entry,&perm);
+						switch(tag) {
+						case ACL_USER_OBJ: 
+							*(int*)perm = user; break;
+						case ACL_MASK:
+							has_mask = 1;
+							*(int*)perm = group; break;
+						case ACL_GROUP_OBJ:
+							group_e = entry; break;
+						case ACL_OTHER:
+							*(int*)perm = other; break;
+						}
+					} while (acl_get_entry(acl,ACL_NEXT_ENTRY,&entry));
+					if (!has_mask) {
+						acl_get_permset(group_e,&perm);
+						*(int*)perm = group;
+					}
+					size_t size;
+					acl_obj *obj = __ext2int(acl);
+					char *buf = __acl_to_xattr(obj,&size);
+					if (buf) {
+						print_debug(16,"setattr: acl creation ok\n");
+					}
+					error = raw_setxattr(&vp,buf,size,&cred);
+					VN_RELE(vp);
+					acl_free(acl);
+				}
+			}
+		}
 		fuse_reply_attr(req, &stat_reply, fuse_attr_timeout);
 	} else
 		fuse_reply_err(req, error);
