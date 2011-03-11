@@ -135,7 +135,7 @@ static void print_debug(int debug_level,const char *format, ...)
 {
   if(debug_level & DEBUG_LEVEL){
       
-      char debug_str[256];
+      char debug_str[2048];
       va_list ap;
       va_start(ap,format);
       vsprintf(debug_str,format,ap);
@@ -614,22 +614,17 @@ out:
 	return error;
 }
 
-static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t **new_vp,
-		cred_t *cred)
+static int read_xattr(vnode_t **new_vp, char **buf, int *size, cred_t *cred)
 {
-	int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_access", new_vp,
-			cred);
-	if (error) return NULL;
     vattr_t vattr;
-
-    error = VOP_GETATTR(*new_vp, &vattr, ATTR_NOACLCHECK, cred, NULL);
+    int error = VOP_GETATTR(*new_vp, &vattr, ATTR_NOACLCHECK, cred, NULL);
     if (error) goto out;
-    char *buf = malloc(vattr.va_size);
-    if (!buf)
+    *buf = malloc(vattr.va_size);
+    if (!*buf)
 		goto out;
     error = VOP_OPEN(new_vp, FREAD, cred, NULL);
     if (error) {
-		free(buf);
+		free(*buf);
 		goto out;
     }
 
@@ -642,18 +637,34 @@ static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t **new_vp,
     uio.uio_llimit = RLIM64_INFINITY;
     uio.uio_extflg = UIO_COPY_CACHED;
 
-    iovec.iov_base = buf;
+    iovec.iov_base = *buf;
     iovec.iov_len = vattr.va_size;
     uio.uio_resid = iovec.iov_len;
     uio.uio_loffset = 0;
 
     error = VOP_READ(*new_vp, &uio, FREAD, cred, NULL);
 	if (error) {
-		free(buf);
+		free(*buf);
 		goto out;
 	}
     error = VOP_CLOSE(*new_vp, FREAD, 1, (offset_t) 0, cred, NULL);
-	acl_t acl = __acl_from_xattr(buf,vattr.va_size);
+out:
+	*size = vattr.va_size;
+	return error;
+}
+
+static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t **new_vp,
+		cred_t *cred)
+{
+	int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_access", new_vp,
+			cred);
+	if (error) return NULL;
+	int size;
+	char *buf;
+	error = read_xattr(new_vp,&buf,&size,cred);
+	if (error) goto out;
+
+	acl_t acl = __acl_from_xattr(buf,size);
 	free(buf);
 	return acl;
 out:
@@ -995,12 +1006,135 @@ static void zfsfuse_flush(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req,0);
 }
 
+static void setup_acl_after_mode(zfsvfs_t *zfsvfs, int ino, cred_t *cred,
+		int mode, int def)
+{
+	vnode_t *vp;
+	acl_t acl = zfsfuse_getacl(zfsvfs, ino, &vp, cred);
+	if (acl) {
+		acl_entry_t entry;
+		if (acl_get_entry(acl,ACL_FIRST_ENTRY,&entry)) {
+			acl_permset_t perm;
+			int user = (mode>>6) & 7,
+				group = (mode>>3)& 7,
+				other = (mode&7);
+			acl_entry_t group_e;
+			int has_mask = 0;
+
+			do {
+				acl_tag_t tag;
+				acl_get_tag_type(entry,&tag);
+				acl_get_permset(entry,&perm);
+				if (def) {
+					// apply on a default acl : and
+					switch(tag) {
+					case ACL_USER_OBJ: 
+						*(int*)perm &= user; break;
+					case ACL_MASK:
+						has_mask = 1;
+						*(int*)perm &= group; break;
+					case ACL_GROUP_OBJ:
+						group_e = entry; break;
+					case ACL_OTHER:
+						*(int*)perm &= other; break;
+					}
+				} else {
+					// an access acl overwritten by a mode
+					switch(tag) {
+					case ACL_USER_OBJ: 
+						*(int*)perm = user; break;
+					case ACL_MASK:
+						has_mask = 1;
+						*(int*)perm = group; break;
+					case ACL_GROUP_OBJ:
+						group_e = entry; break;
+					case ACL_OTHER:
+						*(int*)perm = other; break;
+					}
+				}
+			} while (acl_get_entry(acl,ACL_NEXT_ENTRY,&entry));
+			if (!has_mask) {
+				acl_get_permset(group_e,&perm);
+				if (def)
+					*(int*)perm &= group;
+				else
+					*(int*)perm = group;
+			}
+			size_t size;
+			acl_obj *obj = __ext2int(acl);
+			char *buf = __acl_to_xattr(obj,&size);
+			if (buf) {
+				print_debug(16,"setattr: acl creation ok\n");
+			}
+			raw_setxattr(&vp,buf,size,cred);
+			free(buf);
+		}
+		VN_RELE(vp);
+		acl_free(acl);
+	} else
+		printf("setup_acl_after_mode: no acl !\n");
+}
+
+static void apply_default_acl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t *new_vp,
+	   cred_t *cred, mode_t mode, int isdir)
+{
+	vnode_t *vp;
+	if (cf_enable_xattr) {
+		int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_default", &vp,
+				cred);
+		if (!error) {
+			// we really got a posix acl from the parent directory then...
+			// Let's copy it to the file we just created
+			int size;
+			char *buf;
+			error = read_xattr(&vp,&buf,&size,cred);
+			VN_RELE(vp);
+			if (!error) {
+				error = VOP_LOOKUP(new_vp, "", &vp, NULL, LOOKUP_XATTR |	\
+						CREATE_XATTR_DIR, NULL, cred, NULL, NULL, NULL);	\
+						vattr_t vattr;
+				vattr.va_type = VREG;
+				vattr.va_mode = 0660;
+				vattr.va_mask = AT_TYPE|AT_MODE|AT_SIZE;
+				vattr.va_size = 0;
+
+				vnode_t *new_vp2;
+				if (isdir) {
+					// This is a dir, it inherits the default acl as is
+					error = VOP_CREATE(vp, "system.posix_acl_default", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
+					if(error) {
+						printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
+						goto out2;
+					}
+
+					error = raw_setxattr(&new_vp2,buf,size,cred);
+					VN_RELE(new_vp2);
+				}
+				// It's a file, it gets the default acl with a few changes
+				error = VOP_CREATE(vp, "system.posix_acl_access", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
+				if(error) {
+					printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
+					goto out2;
+				}
+
+				VN_RELE(vp);
+				vp = new_vp2;
+				error = raw_setxattr(&vp,buf,size,cred);
+out2:
+				if(vp != NULL)
+					VN_RELE(vp);
+				setup_acl_after_mode(zfsvfs, VTOZ(new_vp)->z_id, cred,mode,1);
+			}
+		} 
+	}
+}
+
 static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, int fflags, mode_t createmode, const char *name)
 {
 	if(name && strlen(name) >= MAXNAMELEN)
 		ERROR( ENAMETOOLONG);
 
-    print_debug(1,"function %s\n",__FUNCTION__);
+    print_debug(1,"function %s name:%s mode:%o\n",__FUNCTION__,name,createmode);
 	vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);
 	zfsvfs_t *zfsvfs = vfs->vfs_data;
 	ino = FUSE2ZFS(ino, zfsvfs);
@@ -1067,6 +1201,13 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 			goto out;
 
 		VN_RELE(vp);
+		const struct fuse_ctx *ctx = fuse_req_ctx(req);
+		// Not sure about createmode|ctx->umask
+		// See pjd-fstest-20090130-RC/tests/xacl/01.t:30
+		// to pass the test the mode here should be either ored or replaced
+		// by umask. An or operation should be ok...
+		apply_default_acl(zfsvfs,ino,new_vp,&cred,createmode|ctx->umask,0);
+
 		vp = new_vp;
 	} else {
 		/*
@@ -1273,6 +1414,9 @@ static void zfsfuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 		goto out;
 
 	ASSERT(vp != NULL);
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	printf("mkdir: umask %o mode %o\n",ctx->umask,mode);
+	apply_default_acl(zfsvfs,parent,vp,&cred,mode|ctx->umask,1);
 
 	struct fuse_entry_param e = { 0 };
 
@@ -1465,48 +1609,7 @@ out: ;
 
 	if(!error) {
 		if (vattr.va_mask & AT_MODE && cf_enable_xattr) {
-			acl_t acl = zfsfuse_getacl(zfsvfs, ino, &vp, &cred);
-			if (acl) {
-				acl_entry_t entry;
-				if (acl_get_entry(acl,ACL_FIRST_ENTRY,&entry)) {
-					acl_permset_t perm;
-					int user = (attr->st_mode>>6) & 7,
-						group = (attr->st_mode>>3)& 7,
-						other = (attr->st_mode&7);
-					acl_entry_t group_e;
-					int has_mask = 0;
-
-					do {
-						acl_tag_t tag;
-						acl_get_tag_type(entry,&tag);
-						acl_get_permset(entry,&perm);
-						switch(tag) {
-						case ACL_USER_OBJ: 
-							*(int*)perm = user; break;
-						case ACL_MASK:
-							has_mask = 1;
-							*(int*)perm = group; break;
-						case ACL_GROUP_OBJ:
-							group_e = entry; break;
-						case ACL_OTHER:
-							*(int*)perm = other; break;
-						}
-					} while (acl_get_entry(acl,ACL_NEXT_ENTRY,&entry));
-					if (!has_mask) {
-						acl_get_permset(group_e,&perm);
-						*(int*)perm = group;
-					}
-					size_t size;
-					acl_obj *obj = __ext2int(acl);
-					char *buf = __acl_to_xattr(obj,&size);
-					if (buf) {
-						print_debug(16,"setattr: acl creation ok\n");
-					}
-					error = raw_setxattr(&vp,buf,size,&cred);
-					VN_RELE(vp);
-					acl_free(acl);
-				}
-			}
+			setup_acl_after_mode(zfsvfs,ino,&cred,attr->st_mode,0);
 		}
 		fuse_reply_attr(req, &stat_reply, fuse_attr_timeout);
 	} else
