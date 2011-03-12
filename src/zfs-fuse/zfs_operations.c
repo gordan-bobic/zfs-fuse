@@ -556,8 +556,12 @@ static void zfsfuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 					&cred, NULL);
 			if (!error) {
 				print_debug(16,"setattr ok clearing attrib cache\n");
+#if (FUSE_MAJOR_VERSION == 2 && FUSE_MINOR_VERSION >= 8) || FUSE_MAJOR_VERSION > 2
 				fuse_lowlevel_notify_inval_inode(vfs->fuse_chan, 
 						ZFS2FUSE(ino,zfsvfs), -1, 0); // invalidate attributes
+#else
+				syslog(LOG_WARNING,"can't clear attrib cache with this version of fuse");
+#endif
 			} else
 				perror("setattr");
 
