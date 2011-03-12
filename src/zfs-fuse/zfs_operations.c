@@ -653,10 +653,10 @@ out:
 	return error;
 }
 
-static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t **new_vp,
-		cred_t *cred)
+static acl_t zfsfuse_getacl(zfsvfs_t *zfsvfs, char *name, fuse_ino_t ino,
+	   	vnode_t **new_vp, cred_t *cred)
 {
-	int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_access", new_vp,
+	int error = raw_getxattr(zfsvfs, ino, name, new_vp,
 			cred);
 	if (error) return NULL;
 	int size;
@@ -1007,10 +1007,16 @@ static void zfsfuse_flush(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void setup_acl_after_mode(zfsvfs_t *zfsvfs, int ino, cred_t *cred,
-		int mode, int def)
+		int mode, acl_t acl, vnode_t *vp)
 {
-	vnode_t *vp;
-	acl_t acl = zfsfuse_getacl(zfsvfs, ino, &vp, cred);
+	/* This function can be called either after a mode has been set and it
+	 * affects the acl, in this case no acl is passed.
+	 * Or with a default acl to apply to a newly created file */
+	int def = 1;
+	if (!acl) {
+		acl = zfsfuse_getacl(zfsvfs, "system.posix_acl_access", ino, &vp, cred);
+		def = 0; // This is not a default acl
+	}
 	if (acl) {
 		acl_entry_t entry;
 		if (acl_get_entry(acl,ACL_FIRST_ENTRY,&entry)) {
@@ -1063,9 +1069,6 @@ static void setup_acl_after_mode(zfsvfs_t *zfsvfs, int ino, cred_t *cred,
 			size_t size;
 			acl_obj *obj = __ext2int(acl);
 			char *buf = __acl_to_xattr(obj,&size);
-			if (buf) {
-				print_debug(16,"setattr: acl creation ok\n");
-			}
 			raw_setxattr(&vp,buf,size,cred);
 			free(buf);
 		}
@@ -1076,57 +1079,48 @@ static void setup_acl_after_mode(zfsvfs_t *zfsvfs, int ino, cred_t *cred,
 }
 
 static void apply_default_acl(zfsvfs_t *zfsvfs, fuse_ino_t ino, vnode_t *new_vp,
-	   cred_t *cred, mode_t mode, int isdir)
+	   cred_t *cred, mode_t mode, int isdir, acl_t acl)
 {
 	vnode_t *vp;
-	if (cf_enable_xattr) {
-		int error = raw_getxattr(zfsvfs, ino, "system.posix_acl_default", &vp,
-				cred);
-		if (!error) {
-			// we really got a posix acl from the parent directory then...
-			// Let's copy it to the file we just created
-			int size;
-			char *buf;
-			error = read_xattr(&vp,&buf,&size,cred);
-			VN_RELE(vp);
-			if (!error) {
-				error = VOP_LOOKUP(new_vp, "", &vp, NULL, LOOKUP_XATTR |	\
-						CREATE_XATTR_DIR, NULL, cred, NULL, NULL, NULL);	\
-						vattr_t vattr;
-				vattr.va_type = VREG;
-				vattr.va_mode = 0660;
-				vattr.va_mask = AT_TYPE|AT_MODE|AT_SIZE;
-				vattr.va_size = 0;
+	int error = VOP_LOOKUP(new_vp, "", &vp, NULL, LOOKUP_XATTR |	\
+			CREATE_XATTR_DIR, NULL, cred, NULL, NULL, NULL);	\
+			vattr_t vattr;
+	vattr.va_type = VREG;
+	vattr.va_mode = 0660;
+	vattr.va_mask = AT_TYPE|AT_MODE|AT_SIZE;
+	vattr.va_size = 0;
 
-				vnode_t *new_vp2;
-				if (isdir) {
-					// This is a dir, it inherits the default acl as is
-					error = VOP_CREATE(vp, "system.posix_acl_default", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
-					if(error) {
-						printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
-						goto out2;
-					}
+	vnode_t *new_vp2;
+	if (isdir) {
+		// This is a dir, it inherits the default acl as is
+		error = VOP_CREATE(vp, "system.posix_acl_default", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
+		if(error) {
+			printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
+			goto out2;
+		}
 
-					error = raw_setxattr(&new_vp2,buf,size,cred);
-					VN_RELE(new_vp2);
-				}
-				// It's a file, it gets the default acl with a few changes
-				error = VOP_CREATE(vp, "system.posix_acl_access", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
-				if(error) {
-					printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
-					goto out2;
-				}
-
-				VN_RELE(vp);
-				vp = new_vp2;
-				error = raw_setxattr(&vp,buf,size,cred);
-out2:
-				if(vp != NULL)
-					VN_RELE(vp);
-				setup_acl_after_mode(zfsvfs, VTOZ(new_vp)->z_id, cred,mode,1);
-			}
-		} 
+		// Get the xattr from the acl
+		size_t size;
+		acl_obj *obj = __ext2int(acl);
+		char *buf = __acl_to_xattr(obj,&size);
+		error = raw_setxattr(&new_vp2,buf,size,cred);
+		VN_RELE(new_vp2);
+		free(buf);
 	}
+	// It's a file, it gets the default acl with a few changes
+	error = VOP_CREATE(vp, "system.posix_acl_access", &vattr, NONEXCL, VWRITE, &new_vp2, cred, 0, NULL, NULL);
+	if(error) {
+		printf("opencreate: got error %d while creating xattr, this should not happen\n",error);
+		goto out2;
+	}
+
+	VN_RELE(vp);
+	vp = new_vp2;
+	setup_acl_after_mode(zfsvfs, VTOZ(new_vp)->z_id, cred,mode,acl,vp);
+	return;
+out2:
+	if(vp != NULL)
+		VN_RELE(vp);
 }
 
 static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, int fflags, mode_t createmode, const char *name)
@@ -1175,6 +1169,20 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 	ASSERT(vp != NULL);
 
 	if (flags & FCREAT) {
+		acl_t acl;
+		if (cf_enable_xattr) {
+			vnode_t *ap;
+			/* Get the default acl from parent directory, get the mode from
+			 * it, and mask the createmode with it */
+			acl = zfsfuse_getacl(zfsvfs,"system.posix_acl_default", ino, &ap, &cred);
+			if (acl) {
+				mode_t mode;
+				acl_equiv_mode(acl,&mode);
+				createmode &= mode;
+				VN_RELE(ap);
+			}
+		}
+
 		enum vcexcl excl;
 
 		/*
@@ -1201,12 +1209,14 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 			goto out;
 
 		VN_RELE(vp);
-		const struct fuse_ctx *ctx = fuse_req_ctx(req);
-		// Not sure about createmode|ctx->umask
-		// See pjd-fstest-20090130-RC/tests/xacl/01.t:30
-		// to pass the test the mode here should be either ored or replaced
-		// by umask. An or operation should be ok...
-		apply_default_acl(zfsvfs,ino,new_vp,&cred,createmode|ctx->umask,0);
+		if (cf_enable_xattr && acl) {
+			const struct fuse_ctx *ctx = fuse_req_ctx(req);
+			// Not sure about createmode|ctx->umask
+			// See pjd-fstest-20090130-RC/tests/xacl/01.t:30
+			// to pass the test the mode here should be either ored or replaced
+			// by umask. An or operation should be ok...
+			apply_default_acl(zfsvfs,ino,new_vp,&cred,createmode|ctx->umask,0,acl);
+		}
 
 		vp = new_vp;
 	} else {
@@ -1399,15 +1409,29 @@ static void zfsfuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 	vnode_t *dvp = ZTOV(znode);
 	ASSERT(dvp != NULL);
 
+	cred_t cred;
+	zfsfuse_getcred(req, &cred);
+
+	acl_t acl;
+	if (cf_enable_xattr) {
+		vnode_t *ap;
+		/* Get the default acl from parent directory, get the mode from
+		 * it, and mask the createmode with it */
+		acl = zfsfuse_getacl(zfsvfs,"system.posix_acl_default", parent, &ap, &cred);
+		if (acl) {
+			mode_t amode;
+			acl_equiv_mode(acl,&amode);
+			mode &= amode;
+			VN_RELE(ap);
+		}
+	}
+
 	vnode_t *vp = NULL;
 
 	vattr_t vattr = { 0 };
 	vattr.va_type = VDIR;
 	vattr.va_mode = mode & PERMMASK;
 	vattr.va_mask = AT_TYPE | AT_MODE;
-
-	cred_t cred;
-	zfsfuse_getcred(req, &cred);
 
 	error = VOP_MKDIR(dvp, (char *) name, &vattr, &vp, &cred, NULL, 0, NULL);
 	if(error)
@@ -1416,7 +1440,8 @@ static void zfsfuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 	ASSERT(vp != NULL);
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	printf("mkdir: umask %o mode %o\n",ctx->umask,mode);
-	apply_default_acl(zfsvfs,parent,vp,&cred,mode|ctx->umask,1);
+	if (cf_enable_xattr && acl) 
+		apply_default_acl(zfsvfs,parent,vp,&cred,mode|ctx->umask,1,acl);
 
 	struct fuse_entry_param e = { 0 };
 
@@ -1609,7 +1634,7 @@ out: ;
 
 	if(!error) {
 		if (vattr.va_mask & AT_MODE && cf_enable_xattr) {
-			setup_acl_after_mode(zfsvfs,ino,&cred,attr->st_mode,0);
+			setup_acl_after_mode(zfsvfs,ino,&cred,attr->st_mode,NULL,NULL);
 		}
 		fuse_reply_attr(req, &stat_reply, fuse_attr_timeout);
 	} else
