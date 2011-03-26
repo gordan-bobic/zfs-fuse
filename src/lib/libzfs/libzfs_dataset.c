@@ -1730,7 +1730,7 @@ get_numeric_property(zfs_handle_t *zhp, zfs_prop_t prop, zprop_source_t *src,
 	case ZFS_PROP_ATIME:
 	case ZFS_PROP_DEVICES:
 	case ZFS_PROP_EXEC:
-	case ZFS_PROP_READONLY:
+	// case ZFS_PROP_READONLY:
 	case ZFS_PROP_SETUID:
 	case ZFS_PROP_XATTR:
 	case ZFS_PROP_NBMAND:
@@ -1756,6 +1756,7 @@ get_numeric_property(zfs_handle_t *zhp, zfs_prop_t prop, zprop_source_t *src,
 	case ZFS_PROP_REFQUOTA:
 	case ZFS_PROP_RESERVATION:
 	case ZFS_PROP_REFRESERVATION:
+	case ZFS_PROP_READONLY:
 		*val = getprop_uint64(zhp, prop, source);
 
 		if (*source == NULL) {
