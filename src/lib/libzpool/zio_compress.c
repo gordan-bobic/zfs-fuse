@@ -50,6 +50,22 @@ zio_compress_info_t zio_compress_table[ZIO_COMPRESS_FUNCTIONS] = {
 	{gzip_compress,		gzip_decompress,	8,	"gzip-8"},
 	{gzip_compress,		gzip_decompress,	9,	"gzip-9"},
 	{zle_compress,		zle_decompress,		64,	"zle"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {NULL,                  NULL,                   0,      "empty"},
+       {lzo_compress,          lzo_decompress,         0,      "lzo"},
 };
 
 enum zio_compress

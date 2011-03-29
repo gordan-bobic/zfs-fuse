@@ -3,7 +3,7 @@ Import('env')
 VariantDir('build-user', '.', duplicate = 0)
 VariantDir('build-kernel', '.', duplicate = 0)
 
-objects = Split('compress.c list.c zfs_comutil.c zfs_deleg.c zfs_namecheck.c zfs_prop.c zpool_prop.c zprop_common.c')
+objects = Split('compress.c list.c zfs_comutil.c zfs_deleg.c zfs_namecheck.c zfs_prop.c zpool_prop.c zprop_common.c minilzo.c')
 
 objects_user = ['build-user/' + o for o in objects]
 objects_kernel = ['build-kernel/' + o for o in objects]
@@ -13,6 +13,7 @@ cpppath_user = cpppath_common + Split('#lib/libzpool/include #lib/libsolcompat/i
 cpppath_kernel = cpppath_common + ['#lib/libsolkerncompat/include']
 
 ccflags_kernel = ['-D_KERNEL']
+
 
 env.StaticLibrary('libzfscommon-user', objects_user, CPPPATH = env['CPPPATH'] + cpppath_user)
 env.StaticLibrary('libzfscommon-kernel', objects_kernel, CPPPATH = env['CPPPATH'] + cpppath_kernel, CCFLAGS = env['CCFLAGS'] + ccflags_kernel)
