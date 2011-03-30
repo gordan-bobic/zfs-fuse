@@ -67,6 +67,7 @@ zio_compress_info_t zio_compress_table[ZIO_COMPRESS_FUNCTIONS] = {
        {NULL,                  NULL,                   0,      "empty"},
        {lzo_compress,          lzo_decompress,         0,      "lzo"},
        {bz2_compress,          bz2_decompress,         9,      "bz2"},
+       {lzo_compress,          lzo_decompress,         9,      "lzo9"},
 };
 
 enum zio_compress

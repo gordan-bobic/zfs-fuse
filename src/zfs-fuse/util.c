@@ -49,7 +49,7 @@
 static int ioctl_fd = -1;
 static int lock_fd = -1;
 
-#define LOCKDIR "/var/lock/zfs"
+#define LOCKDIR "/tmp"
 #define LOCKFILE LOCKDIR "/zfs_lock"
 
 boolean_t listener_thread_started = B_FALSE;

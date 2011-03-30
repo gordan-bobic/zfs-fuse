@@ -97,6 +97,7 @@ zfs_prop_init(void)
 		{ "zle",	ZIO_COMPRESS_ZLE },
 		{ "lzo",        ZIO_COMPRESS_LZO }, /* unofficial */
 		{ "bz2",        ZIO_COMPRESS_BZIP2 }, /* unofficial */
+		{ "lzo9",        ZIO_COMPRESS_LZO9 }, /* unofficial */
 		{ NULL }
 	};
 
@@ -204,7 +205,7 @@ zfs_prop_init(void)
 	zprop_register_index(ZFS_PROP_COMPRESSION, "compression",
 	    ZIO_COMPRESS_DEFAULT, PROP_INHERIT,
 	    ZFS_TYPE_FILESYSTEM | ZFS_TYPE_VOLUME,
-	    "on | off | lzjb | gzip | gzip-[1-9] | zle | lzo | bz2", "COMPRESS",
+	    "on | off | lzjb | gzip | gzip-[1-9] | zle | lzo | bz2 | lzo9", "COMPRESS",
 	    compress_table);
 	zprop_register_index(ZFS_PROP_SNAPDIR, "snapdir", ZFS_SNAPDIR_HIDDEN,
 	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM,

@@ -528,7 +528,7 @@ typedef struct zpool_rewind_policy {
  * The location of the pool configuration repository, shared between kernel and
  * userland.
  */
-#define	ZPOOL_CACHE_DIR		"/var/lib/zfs"
+#define	ZPOOL_CACHE_DIR		"/tmp"
 #define	ZPOOL_CACHE		ZPOOL_CACHE_DIR "/zpool.cache"
 
 /*
@@ -693,7 +693,7 @@ typedef struct ddt_histogram {
  * ZFSFUSE: Renamed ZFS_DEV to ZFS_SOCK_NAME in order to
  * catch all occurrences of this symbol.
  */
-#define ZFS_SOCK_DIR "/var/run/zfs"
+#define ZFS_SOCK_DIR "/tmp"
 #define ZFS_SOCK_NAME ZFS_SOCK_DIR "/zfs_socket"
 
 /* general zvol path */
