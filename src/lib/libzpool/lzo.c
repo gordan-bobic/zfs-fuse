@@ -18,19 +18,20 @@
 
 HEAP_ALLOC(wrkmem,LZO1X_MEM_COMPRESS);
 
-static int lzo_init = 0;
+static int init_lzo = 0;
 
 int lz_compress(void *dst, const void *src, size_t srclen,size_t *dstlen) 
 {
    int zstat; 
 
-   if (!lzo_init) {
+   if (!init_lzo) {
 	   if (lzo_init() != LZO_E_OK)
 	   {
 		   printf("internal error - lzo_init() failed !!!\n");
 		   printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
 		   return LZO_E_ERROR;
 	   }
+	   init_lzo = 1;
    }
    lzo_uint cmps = srclen + srclen / 16 + 64 +3;
    lzo_uint cps;
@@ -51,13 +52,14 @@ int lz_uncompress(void *dst, size_t *dstlen, const void *src, size_t srclen)
 {
    int zstat;
 
-   if (!lzo_init) {
+   if (!init_lzo) {
 	   if (lzo_init() != LZO_E_OK)
 	   {
 		   printf("internal error - lzo_init() failed !!!\n");
 		   printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
 		   return LZO_E_ERROR;
 	   }
+	   init_lzo = 1;
    }
 
    zstat=lzo1x_decompress((const lzo_bytep)src,(lzo_uint)srclen,(lzo_bytep)dst,(lzo_uintp)dstlen,NULL);
