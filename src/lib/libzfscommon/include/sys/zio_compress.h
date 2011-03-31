@@ -72,6 +72,10 @@ extern size_t bz2_compress(void *src, void *dst, size_t s_len, size_t d_len,
     int level);
 extern int bz2_decompress(void *src, void *dst, size_t s_len, size_t d_len,
     int level);
+extern size_t lzma_compress(void *src, void *dst, size_t s_len, size_t d_len,
+    int level);
+extern int lzma_decompress(void *src, void *dst, size_t s_len, size_t d_len,
+    int level);
 extern size_t zle_compress(void *src, void *dst, size_t s_len, size_t d_len,
     int level);
 extern int zle_decompress(void *src, void *dst, size_t s_len, size_t d_len,
