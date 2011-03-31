@@ -42,7 +42,8 @@ bz2_compress(void *s_start, void *d_start, size_t s_len, size_t d_len, int n)
 {
 	ASSERT(d_len <= s_len);
 
-	if (BZ2_bzBuffToBuffCompress(d_start, &d_len, s_start, s_len, n, 0, 50) != BZ_OK) {
+	if (BZ2_bzBuffToBuffCompress(d_start,(unsigned int *) &d_len, s_start,
+				s_len, n, 0, 50) != BZ_OK) {
 		if (d_len != s_len) // unchanged in case of error
 			return (s_len);
 
@@ -59,7 +60,8 @@ bz2_decompress(void *s_start, void *d_start, size_t s_len, size_t d_len, int n)
 {
 	ASSERT(d_len >= s_len);
 
-	if (BZ2_bzBuffToBuffDecompress(d_start, &d_len, s_start, s_len, 0, 0) != Z_OK)
+	if (BZ2_bzBuffToBuffDecompress(d_start, (unsigned int *)&d_len, s_start,
+			   s_len, 0, 0) != Z_OK)
 		return (-1);
 
 	return (0);
