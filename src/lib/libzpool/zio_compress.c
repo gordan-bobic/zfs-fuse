@@ -68,7 +68,16 @@ zio_compress_info_t zio_compress_table[ZIO_COMPRESS_FUNCTIONS] = {
        {lzo_compress,          lzo_decompress,         0,      "lzo"},
        {bz2_compress,          bz2_decompress,         9,      "bz2"},
        {lzo_compress,          lzo_decompress,         9,      "lzo9"},
+       {lzma_compress,         lzma_decompress,        1,      "lzma"},
+       {lzma_compress,         lzma_decompress,        2,      "lzma"},
+       {lzma_compress,         lzma_decompress,        3,      "lzma"},
+       {lzma_compress,         lzma_decompress,        4,      "lzma"},
+       {lzma_compress,         lzma_decompress,        5,      "lzma"},
        {lzma_compress,         lzma_decompress,        6,      "lzma"},
+       {lzma_compress,         lzma_decompress,        7,      "lzma"},
+       {lzma_compress,         lzma_decompress,        8,      "lzma"},
+       {lzma_compress,         lzma_decompress,        9,      "lzma"},
+       {NULL,                  NULL,                   0,      "empty"},
 };
 
 enum zio_compress

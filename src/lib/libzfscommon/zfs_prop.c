@@ -98,7 +98,16 @@ zfs_prop_init(void)
 		{ "lzo",        ZIO_COMPRESS_LZO }, /* unofficial */
 		{ "bz2",        ZIO_COMPRESS_BZIP2 }, /* unofficial */
 		{ "lzo9",        ZIO_COMPRESS_LZO9 }, /* unofficial */
-		{ "lzma",        ZIO_COMPRESS_LZMA }, /* unofficial */
+		{ "lzma-1",        ZIO_COMPRESS_LZMA_1 }, /* unofficial */
+		{ "lzma-2",        ZIO_COMPRESS_LZMA_2 }, /* unofficial */
+		{ "lzma-3",        ZIO_COMPRESS_LZMA_3 }, /* unofficial */
+		{ "lzma-4",        ZIO_COMPRESS_LZMA_4 }, /* unofficial */
+		{ "lzma-5",        ZIO_COMPRESS_LZMA_5 }, /* unofficial */
+		{ "lzma-6",        ZIO_COMPRESS_LZMA_6 }, /* unofficial */
+		{ "lzma-7",        ZIO_COMPRESS_LZMA_7 }, /* unofficial */
+		{ "lzma-8",        ZIO_COMPRESS_LZMA_8 }, /* unofficial */
+		{ "lzma-9",        ZIO_COMPRESS_LZMA_9 }, /* unofficial */
+		{ "lzma",        ZIO_COMPRESS_LZMA_3 }, /* unofficial */
 		{ NULL }
 	};
 
@@ -206,7 +215,7 @@ zfs_prop_init(void)
 	zprop_register_index(ZFS_PROP_COMPRESSION, "compression",
 	    ZIO_COMPRESS_DEFAULT, PROP_INHERIT,
 	    ZFS_TYPE_FILESYSTEM | ZFS_TYPE_VOLUME,
-	    "on | off | lzjb | gzip | gzip-[1-9] | zle | lzo | bz2 | lzo9 | lzma", "COMPRESS",
+	    "on | off | lzjb | gzip | gzip-[1-9] | zle | lzo | bz2 | lzo9 | lzma-[1-9] | lzma", "COMPRESS",
 	    compress_table);
 	zprop_register_index(ZFS_PROP_SNAPDIR, "snapdir", ZFS_SNAPDIR_HIDDEN,
 	    PROP_INHERIT, ZFS_TYPE_FILESYSTEM,
