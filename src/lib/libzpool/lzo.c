@@ -9,6 +9,7 @@
 #include <umem.h>
 #include <lzo/lzoconf.h>
 #include <lzo/lzo1x.h>
+#include <pthread.h>
 
 /* Work-memory needed for compression. Allocate memory in units
 *  * of `lzo_align_t' (instead of `char') to make sure it is properly aligned.
@@ -17,28 +18,88 @@
 #define HEAP_ALLOC(var,size) \
 	    lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
 
-static int init_lzo = 0;
+static pthread_mutex_t wrkmem_mtx;
+static int alloc=0, used=0;
+typedef struct {
+	lzo_voidp wrkmem;
+	size_t len;
+	int used;
+} tent;
+static tent *ent = NULL;
+static int init_done = 0;
+
+void init_lzo()
+{
+	if (lzo_init() != LZO_E_OK)
+	{
+		printf("internal error - lzo_init() failed !!!\n");
+		printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
+		return;
+	}
+	pthread_mutex_init(&wrkmem_mtx, NULL);
+	init_done = 1;
+}
+
+static lzo_voidp get_wrkmem(size_t wrk_len)
+{
+	pthread_mutex_lock(&wrkmem_mtx);
+	int n;
+	for (n=0; n<used; n++)
+		if (!ent[n].used && ent[n].len == wrk_len) {
+			ent[n].used = 1;
+			pthread_mutex_unlock(&wrkmem_mtx);
+			return ent[n].wrkmem;
+		}
+	if (used == alloc) {
+		alloc += 10;
+		ent = realloc(ent,sizeof(tent)*alloc);
+	}
+	lzo_voidp wrkmem = umem_alloc(wrk_len,UMEM_NOFAIL);
+	ent[used].wrkmem = wrkmem;
+	ent[used].used = 1;
+	ent[used].len = wrk_len;
+	used++;
+	pthread_mutex_unlock(&wrkmem_mtx);
+	return wrkmem;
+}
+
+static void free_wrkmem(lzo_voidp wrkmem)
+{
+	int n;
+	pthread_mutex_lock(&wrkmem_mtx);
+	for (n=0; n<used; n++) {
+		if (ent[n].wrkmem == wrkmem) {
+			ent[n].used = 0;
+			pthread_mutex_unlock(&wrkmem_mtx);
+			return;
+		}
+	}
+}
+
+void done_lzo() {
+	int n;
+	for (n=0; n<used; n++)
+		umem_free(ent[n].wrkmem,ent[n].len);
+	used = 0;
+	free(ent);
+	ent = NULL;
+	alloc = 0;
+	pthread_mutex_destroy(&wrkmem_mtx);
+}
 
 static int lz_compress(void *dst, const void *src, size_t srclen,size_t *dstlen, int level) 
 {
    int zstat; 
 
-   if (!init_lzo) {
-	   if (lzo_init() != LZO_E_OK)
-	   {
-		   printf("internal error - lzo_init() failed !!!\n");
-		   printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
-		   return LZO_E_ERROR;
-	   }
-	   init_lzo = 1;
-   }
+   if (!init_done)
+	   return LZO_E_ERROR;
    lzo_voidp wrkmem;
    lzo_uint32 wrk_len = 0;
    if (level == 9)
 	   wrk_len = LZO1X_999_MEM_COMPRESS;
    else
 	   wrk_len = LZO1X_1_MEM_COMPRESS;
-   wrkmem = (lzo_voidp) umem_alloc(wrk_len, UMEM_NOFAIL);
+   wrkmem = get_wrkmem(wrk_len);
 
    lzo_uint cmps = srclen + srclen / 16 + 64 +3;
    lzo_uint cps;
@@ -55,7 +116,7 @@ static int lz_compress(void *dst, const void *src, size_t srclen,size_t *dstlen,
 	   *dstlen=cps;
    }
    umem_free(cmpb, cmps);
-   umem_free(wrkmem,wrk_len);
+   free_wrkmem(wrkmem);
    return zstat; 
 } 
 
@@ -63,15 +124,8 @@ int lz_uncompress(void *dst, size_t *dstlen, const void *src, size_t srclen)
 {
    int zstat;
 
-   if (!init_lzo) {
-	   if (lzo_init() != LZO_E_OK)
-	   {
-		   printf("internal error - lzo_init() failed !!!\n");
-		   printf("(this usually indicates a compiler bug - try recompiling\nwithout optimizations, and enable `-DLZO_DEBUG' for diagnostics)\n");
-		   return LZO_E_ERROR;
-	   }
-	   init_lzo = 1;
-   }
+   if (!init_done)
+	   return LZO_E_ERROR;
 
    zstat=lzo1x_decompress((const lzo_bytep)src,(lzo_uint)srclen,(lzo_bytep)dst,(lzo_uintp)dstlen,NULL);
    /* printf("lzu1:sl=%d,ds=%d,zs=%d\n",srclen,*dstlen,zstat); */
