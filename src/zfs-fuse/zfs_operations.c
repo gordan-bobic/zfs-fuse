@@ -52,7 +52,7 @@
 // 2 : lookup
 // 4 : buffers
 // 8 : read and write calls
-// #define DEBUG_LEVEL (4 | 1 | 8)
+// #define DEBUG_LEVEL (4 | 1 | 2 | 8)
 
 static struct {
 	file_info_t **info;
@@ -250,7 +250,6 @@ static int zfsfuse_stat(zfsvfs_t* zfsvfs, vnode_t *vp, struct stat *stbuf, cred_
 {
 	ASSERT(vp != NULL);
 	ASSERT(stbuf != NULL);
-	file_info_t *info;
 	ino_t ino = VTOZ(vp)->z_id;
 
 	vattr_t vattr;
@@ -275,6 +274,17 @@ static int zfsfuse_stat(zfsvfs_t* zfsvfs, vnode_t *vp, struct stat *stbuf, cred_
 	TIMESTRUC_TO_TIME(vattr.va_atime, &stbuf->st_atime);
 	TIMESTRUC_TO_TIME(vattr.va_mtime, &stbuf->st_mtime);
 	TIMESTRUC_TO_TIME(vattr.va_ctime, &stbuf->st_ctime);
+	file_info_t *info = get_info(zfsvfs->z_vfs,ino);
+	/* Some programs use stat or equivalent to get the file size while writing to
+	 * it instead of ftell. Well apparently fuse didn't think about that, there
+	 * is no way to get the fi parameter passed to open from getattr().
+	 * So I'll try to do this as lightly as possible : we get info, then if a
+	 * buffer exists for the file and if when written it will increase the size
+	 * of the file then fix it */
+	if (info && info->used && info->last_off > stbuf->st_size) {
+		stbuf->st_size = info->last_off;
+		print_debug(4,"zfsfuse_stat: size adjusted from buffers\n");
+	}
 
 	return 0;
 }
@@ -323,17 +333,6 @@ static void zfsfuse_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 
 	struct stat stbuf;
 	error = zfsfuse_stat(zfsvfs, vp, &stbuf, &cred);
-
-	file_info_t *info = get_info(vfs,ino);
-	/* Some programs use stat or equivalent to get the file size while writing to
-	 * it instead of ftell. Well apparently fuse didn't think about that, there
-	 * is no way to get the fi parameter passed to open from getattr().
-	 * So I'll try to do this as lightly as possible : we get info, then if a
-	 * buffer exists for the file and if when written it will increase the size
-	 * of the file then fix it */
-	if (info && info->used && info->last_off > stbuf.st_size) {
-		stbuf.st_size = info->last_off;
-	}
 
 	print_debug(2,"getattr: ino %ld got size %zd\n",ino,stbuf.st_size);
 
@@ -976,7 +975,7 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 		error = zfsfuse_stat(zfsvfs, vp, &e.attr, &cred );
 		if(error)
 			goto out;
-		print_debug(2,"opencreat: ino %ld stat got size %zd on create\n",ino,e.attr.st_size);
+		print_debug(2,"opencreat: ino %ld stat got size %zd on create name %s\n",ino,e.attr.st_size,name);
 	}
 
 	file_info_t *info = kmem_cache_alloc(file_info_cache, KM_NOSLEEP);
@@ -1479,6 +1478,7 @@ static void zfsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 	ZFS_EXIT(zfsvfs);
 
+	print_debug(8,"read got error %d bytes %d\n",error,uio.uio_loffset - off);
 	if(!error)
 		fuse_reply_buf(req, outbuf, uio.uio_loffset - off);
 	else
@@ -1548,7 +1548,7 @@ static void zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 		if (!info->used) {
 			file_info_t *info2 = get_info(vfs,ino);
 			if (info2 && info2->used) {
-				syslog(LOG_WARNING,"write: found info from get_info");
+				print_debug(4,"write: found info from get_info");
 				info = info2; // handle it with buffers then
 			}
 		}
