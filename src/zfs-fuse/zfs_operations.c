@@ -52,7 +52,7 @@
 // 2 : lookup
 // 4 : buffers
 // 8 : read and write calls
-// #define DEBUG_LEVEL (4 | 1)
+// #define DEBUG_LEVEL (4 | 1 | 8)
 
 static struct {
 	file_info_t **info;
@@ -215,7 +215,7 @@ static int basic_write(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, const cha
 	ASSERT(VTOZ(vp)->z_id == ino);
 #endif
 
-    print_debug(1,"function %s\n",__FUNCTION__);
+    print_debug(1,"function %s off:%zd size:%zd\n",__FUNCTION__,off,size);
 
 	int error = zfs_enter(zfsvfs);
 	if (error) {
@@ -1491,7 +1491,7 @@ int no_buffers = 0; // command line switch: no-buffers
 
 static void push(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, file_info_t *info, const char *buf, size_t size, off_t off)
 {
-	if (info->used + size < 128<<10) {
+	if (info->used + size < 128<<10 || info->last_off != off) {
 		if (!info->used || info->last_off == off) {
 			if (info->alloc < info->used + size) {
 				int plus = info->used + size - info->alloc;
@@ -1506,13 +1506,14 @@ static void push(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, file_info_t *in
 			info->last_off = off + size;
 			return;
 		} else { // offset just changed, need to flush
+			if (size >= 4096) {
+				basic_write(zfsvfs, cred,ino,buf,size,off,info); 
+				return;
+			}
 		  print_debug(4,"push: ino %ld offset changed, expected %zd, got %zd\n",ino,info->last_off,off);
 		  basic_write(zfsvfs,cred,ino,info->buffer,info->used,info->last_off-info->used,info);
 		  info->used = 0;
-		  if (size < 4096)
-			  push(zfsvfs, cred,ino,info,buf,size,off);
-		  else
-			  basic_write(zfsvfs, cred,ino,buf,size,off,info); 
+		  push(zfsvfs, cred,ino,info,buf,size,off);
 		  return;
 		}
 	} else {
@@ -1535,6 +1536,7 @@ static void zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 	zfsvfs_t *zfsvfs = vfs->vfs_data;
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
+	print_debug(8,"write ino %ld size %zd off %zd\n",ino,size,off);
 	if (fi->flush || info->flags & FSYNC) {
 		if (info->used) {
 			print_debug(4,"write: flushing ino %ld on fsync size %zd off %zd\n",ino,info->used,info->last_off-info->used,info);
@@ -1557,7 +1559,6 @@ static void zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 			return;
 		}
 	}
-	print_debug(8,"write ino %ld size %zd off %zd\n",ino,size,off);
 	
 	int error = basic_write(zfsvfs,&cred, ino, buf, size, off, info);
 
