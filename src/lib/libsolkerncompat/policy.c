@@ -36,6 +36,7 @@
 #include <grp.h>
 #include <errno.h>
 #include <string.h>
+#include <syslog.h>
 
 long pwd_buflen = 0;
 long grp_buflen = 0;
@@ -157,13 +158,23 @@ out:
 	     * can safety return 1 here in this case */
 	    return 1;
 	}
-	if (!ngroups_max) { ngroups_max = sysconf(_SC_NGROUPS_MAX)+1; }
+	if (!ngroups_max) {
+		ngroups_max = sysconf(_SC_NGROUPS_MAX)+1;
+		if (ngroups_max <= 1) {
+			syslog(LOG_ERR,"groupmember: sysconf returned %d, error %s",
+					ngroups_max-1,strerror(errno));
+			ngroups_max = 100;
+			syslog(LOG_WARNING,"groupmember: forcing ngroups_max = %d",ngroups_max);
+		}
+   	}
 	gid_t *groups = malloc(ngroups_max * sizeof(gid_t));
 	if (!groups) {
 		errno = ENOMEM;
 		return 0;
 	}
 	int nb = fuse_req_getgroups(cr->req, ngroups_max,groups);
+	if (nb < 0)
+		syslog(LOG_ERR,"fuse_req_getgroups returned an error, make sure /proc is available");
 	int found = 0;
 	for (int n=0; n<nb; n++)
 		if (groups[n] == gid) {

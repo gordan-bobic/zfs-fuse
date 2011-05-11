@@ -591,6 +591,7 @@ libzfs_init(void)
 	}
 
 	if ((hdl->libzfs_mnttab = setmntent(MNTTAB, "r")) == NULL) {
+		fprintf(stderr,"libzfs_init: setmntent failed : no /proc/mtab ?\n");
 		(void) close(hdl->libzfs_fd);
 		free(hdl);
 		return (NULL);
