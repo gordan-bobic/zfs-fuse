@@ -223,11 +223,16 @@ int do_init_fusesocket()
     return 0;
 }
 
+extern void init_lzo();
+extern void done_lzo();
+
 int do_init()
 {
 	libsolkerncompat_init();
 
 	zfs_vfsinit(zfstype, NULL);
+
+	init_lzo();
 
 	VERIFY(zfs_ioctl_init() == 0);
 
@@ -261,6 +266,8 @@ void do_exit()
 
 	zfsfuse_listener_exit();
     cmd_listener_fini();
+
+	done_lzo();
 
 	if(ioctl_fd != -1)
 		zfsfuse_socket_close(ioctl_fd);

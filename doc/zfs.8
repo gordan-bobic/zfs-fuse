@@ -673,13 +673,28 @@ Changing this property affects only newly-written data.
 .ne 2
 .mk
 .na
-\fB\fBcompression\fR=\fBon\fR | \fBoff\fR | \fBlzjb\fR | \fBgzip\fR | \fBgzip-\fR\fIN\fR | \fBzle\fR\fR
+\fB\fBcompression\fR=\fBon\fR | \fBoff\fR | \fBlzjb\fR | \fBgzip\fR | \fBgzip-N\fR | \fbzle\fR | \fBlzo\fR | \fBlzo9\fR | \fBbz2\fR | \fBlzma-N\fR | \fBlzma
 .ad
 .sp .6
 .RS 4n
 Controls the compression algorithm used for this dataset. The \fBlzjb\fR compression algorithm is optimized for performance while providing decent data compression. Setting compression to \fBon\fR uses the \fBlzjb\fR compression algorithm. The \fBgzip\fR compression algorithm uses the same compression as the \fBgzip\fR(1) command. You can specify the \fBgzip\fR level by using the value \fBgzip-\fR\fIN\fR where \fIN\fR is an integer from 1 (fastest) to 9 (best compression ratio). Currently, \fBgzip\fR is equivalent to \fBgzip-6\fR (which is also the default for \fBgzip\fR(1)).
 .sp
 This property can also be referred to by its shortened column name \fBcompress\fR. Changing this property affects only newly-written data.
+.sp
+\fBzfs-fuse\fR : you can also choose lzo, lzo9, bz2 or lzma with zfs-fuse. Notice that it will create data which will be readable only with zfs-fuse (and not with the other zfs implementations). Here is a quick benchmark of what you can expect from the different compression methods (here when writing bzcat linux-2.6.1.tar.bz2 to a zfs volume)
+
+.nf
+type                 size            time
+uncompressed		 186501120		17,479
+lzjb (on)            88276k			14,768
+lzo                  64793k			13,541
+lzo9                 48213k			25,551
+gzip                 42696k			15,352
+lzma                 39383k			19,933
+bzip2                37992k			23,397
+.fi
+.so
+lzma is equivalent to lzma-3, and bz2 is the maximum bzip2 compression (-9).
 .RE
 
 .sp

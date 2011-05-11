@@ -14,5 +14,6 @@ cpppath_kernel = cpppath_common + ['#lib/libsolkerncompat/include']
 
 ccflags_kernel = ['-D_KERNEL']
 
+
 env.StaticLibrary('libzfscommon-user', objects_user, CPPPATH = env['CPPPATH'] + cpppath_user)
 env.StaticLibrary('libzfscommon-kernel', objects_kernel, CPPPATH = env['CPPPATH'] + cpppath_kernel, CCFLAGS = env['CCFLAGS'] + ccflags_kernel)
