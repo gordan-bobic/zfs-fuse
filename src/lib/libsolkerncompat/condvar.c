@@ -40,9 +40,14 @@
 void
 cv_init(kcondvar_t *cv, char *name, int type, void *arg)
 {
+	pthread_condattr_t condattr;
+	pthread_condattr_init(&condattr);
+	ASSERT(pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC) == 0);
+
 	ASSERT(type == CV_DEFAULT);
 
-	VERIFY(pthread_cond_init(cv, NULL) == 0);
+	VERIFY(pthread_cond_init(cv, &condattr) == 0);
+	pthread_condattr_destroy(&condattr);
 }
 
 void
@@ -64,8 +69,7 @@ clock_t
 cv_timedwait(kcondvar_t *cv, kmutex_t *mp, clock_t abstime)
 {
 	int error;
-	struct timespec ts;
-	struct timeval tv;
+	struct timespec ts,tv;
 	clock_t delta;
 
 top:
@@ -74,10 +78,10 @@ top:
 	if (delta <= 0)
 		return (-1);
 
-	VERIFY(gettimeofday(&tv, NULL) == 0);
+	VERIFY(clock_gettime(CLOCK_MONOTONIC, &tv) == 0);
 
 	ts.tv_sec = tv.tv_sec + delta / hz;
-	ts.tv_nsec = tv.tv_usec * 1000 + (delta % hz) * (NANOSEC / hz);
+	ts.tv_nsec = tv.tv_nsec + (delta % hz) * (NANOSEC / hz);
 	ASSERT(ts.tv_nsec >= 0);
 
 	if(ts.tv_nsec >= NANOSEC) {
