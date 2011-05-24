@@ -42,7 +42,7 @@ cv_init(kcondvar_t *cv, char *name, int type, void *arg)
 {
 	pthread_condattr_t condattr;
 	pthread_condattr_init(&condattr);
-	ASSERT(pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC) == 0);
+	VERIFY(pthread_condattr_setclock(&condattr, CLOCK_MONOTONIC) == 0);
 
 	ASSERT(type == CV_DEFAULT);
 
