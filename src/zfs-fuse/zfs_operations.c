@@ -63,10 +63,8 @@ static struct {
 static void add_info(file_info_t *info) {
 	int n;
 	for (n=0; n<infos.used; n++)
-		if (infos.info[n] == info) {
-			pthread_mutex_unlock(&infos.lock);
+		if (infos.info[n] == info) 
 			return;
-		}
 	if (infos.used == infos.alloc) {
 		infos.alloc += 10;
 		infos.info = realloc(infos.info,sizeof(file_info_t*)*infos.alloc);
@@ -78,10 +76,8 @@ static file_info_t *get_info(vfs_t *vfs, ino_t ino) {
 	int n;
 	for (n=0; n<infos.used; n++) {
 		vnode_t *vn = infos.info[n]->vp;
-		if (vn->v_vfsp == vfs && VTOZ(vn)->z_id == ino) {
-			pthread_mutex_unlock(&infos.lock);
+		if (vn->v_vfsp == vfs && VTOZ(vn)->z_id == ino)
 			return infos.info[n];
-		}
 	}
 	return NULL;
 }
