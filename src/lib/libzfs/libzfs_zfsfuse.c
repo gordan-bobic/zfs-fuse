@@ -200,7 +200,7 @@ int zfsfuse_mount(libzfs_handle_t *hdl, const char *spec, const char *dir, int m
 {
 	assert(dataptr == NULL);
 	assert(datalen == 0);
-	assert(mflag == 0);
+	// assert(mflag == 0);
 	assert(strcmp(fstype, MNTTYPE_ZFS) == 0);
 
 	zfsfuse_cmd_t cmd;
