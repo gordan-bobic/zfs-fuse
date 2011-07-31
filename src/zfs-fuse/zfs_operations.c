@@ -82,36 +82,27 @@ static struct {
 
 static void add_info(file_info_t *info) {
 	int n;
-	pthread_mutex_lock(&infos.lock);
 	for (n=0; n<infos.used; n++)
-		if (infos.info[n] == info) {
-			pthread_mutex_unlock(&infos.lock);
+		if (infos.info[n] == info) 
 			return;
-		}
 	if (infos.used == infos.alloc) {
 		infos.alloc += 10;
 		infos.info = realloc(infos.info,sizeof(file_info_t*)*infos.alloc);
 	}
 	infos.info[infos.used++] = info;
-	pthread_mutex_unlock(&infos.lock);
 }
 
 static file_info_t *get_info(vfs_t *vfs, ino_t ino) {
-	pthread_mutex_lock(&infos.lock);
 	int n;
 	for (n=0; n<infos.used; n++) {
 		vnode_t *vn = infos.info[n]->vp;
-		if (vn->v_vfsp == vfs && VTOZ(vn)->z_id == ino) {
-			pthread_mutex_unlock(&infos.lock);
+		if (vn->v_vfsp == vfs && VTOZ(vn)->z_id == ino)
 			return infos.info[n];
-		}
 	}
-	pthread_mutex_unlock(&infos.lock);
 	return NULL;
 }
 
 static void free_info(file_info_t *info) {
-	pthread_mutex_lock(&infos.lock);
 	int n;
 	for (n=0; n<infos.used; n++) {
 		if (infos.info[n] == info) {
@@ -127,7 +118,6 @@ static void free_info(file_info_t *info) {
 			break;
 		}
 	}
-	pthread_mutex_unlock(&infos.lock);
 }
 
 #if DEBUG_LEVEL
@@ -156,6 +146,7 @@ static void print_debug(int debug_level,const char *format, ...)
 int block_cache;
 int cf_enable_xattr = 0;
 float fuse_attr_timeout, fuse_entry_timeout;
+int no_buffers = 0; // command line switch: no-buffers
 
 static void zfsfuse_getcred(fuse_req_t req, cred_t *cred)
 {
@@ -235,7 +226,7 @@ static int basic_write(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, const cha
 	ASSERT(VTOZ(vp)->z_id == ino);
 #endif
 
-    print_debug(1,"function %s\n",__FUNCTION__);
+    print_debug(1,"function %s off:%zd size:%zd\n",__FUNCTION__,off,size);
 
 	int error = zfs_enter(zfsvfs);
 	if (error) {
@@ -270,7 +261,6 @@ static int zfsfuse_stat(zfsvfs_t* zfsvfs, vnode_t *vp, struct stat *stbuf, cred_
 {
 	ASSERT(vp != NULL);
 	ASSERT(stbuf != NULL);
-	file_info_t *info;
 	ino_t ino = VTOZ(vp)->z_id;
 
 	vattr_t vattr;
@@ -295,6 +285,21 @@ static int zfsfuse_stat(zfsvfs_t* zfsvfs, vnode_t *vp, struct stat *stbuf, cred_
 	TIMESTRUC_TO_TIME(vattr.va_atime, &stbuf->st_atime);
 	TIMESTRUC_TO_TIME(vattr.va_mtime, &stbuf->st_mtime);
 	TIMESTRUC_TO_TIME(vattr.va_ctime, &stbuf->st_ctime);
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		file_info_t *info = get_info(zfsvfs->z_vfs,ino);
+		/* Some programs use stat or equivalent to get the file size while
+		 * writing to it instead of ftell. Well apparently fuse didn't think
+		 * about that, there is no way to get the fi parameter passed to open
+		 * from getattr().  So I'll try to do this as lightly as possible : we
+		 * get info, then if a buffer exists for the file and if when written
+		 * it will increase the size of the file then fix it */
+		if (info && info->used && info->last_off > stbuf->st_size) {
+			stbuf->st_size = info->last_off;
+			print_debug(4,"zfsfuse_stat: size adjusted from buffers\n");
+		}
+		pthread_mutex_unlock(&infos.lock);
+	}
 
 	return 0;
 }
@@ -343,17 +348,6 @@ static void zfsfuse_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 
 	struct stat stbuf;
 	error = zfsfuse_stat(zfsvfs, vp, &stbuf, &cred);
-
-	file_info_t *info = get_info(vfs,ino);
-	/* Some programs use stat or equivalent to get the file size while writing to
-	 * it instead of ftell. Well apparently fuse didn't think about that, there
-	 * is no way to get the fi parameter passed to open from getattr().
-	 * So I'll try to do this as lightly as possible : we get info, then if a
-	 * buffer exists for the file and if when written it will increase the size
-	 * of the file then fix it */
-	if (info && info->used && info->last_off > stbuf.st_size) {
-		stbuf.st_size = info->last_off;
-	}
 
 	print_debug(2,"getattr: ino %ld got size %zd\n",ino,stbuf.st_size);
 
@@ -1000,12 +994,16 @@ static void zfsfuse_flush(fuse_req_t req, fuse_ino_t ino,
 	ino = FUSE2ZFS(ino, zfsvfs);
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
-	if (info->used) {
-		print_debug(4,"flush: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
-		basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
-		info->used = 0;
-	} else {
-		print_debug(4,"flush: no info for ino %ld\n",ino);
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		if (info->used) {
+			print_debug(4,"flush: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
+			basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
+			info->used = 0;
+		} else {
+			print_debug(4,"flush: no info for ino %ld\n",ino);
+		}
+		pthread_mutex_unlock(&infos.lock);
 	}
 	fuse_reply_err(req,0);
 }
@@ -1276,7 +1274,7 @@ static void zfsfuse_opencreate(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 		error = zfsfuse_stat(zfsvfs, vp, &e.attr, &cred );
 		if(error)
 			goto out;
-		print_debug(2,"opencreat: ino %ld stat got size %zd on create\n",ino,e.attr.st_size);
+		print_debug(2,"opencreat: ino %ld stat got size %zd on create name %s\n",ino,e.attr.st_size,name);
 	}
 
 	file_info_t *info = kmem_cache_alloc(file_info_cache, KM_NOSLEEP);
@@ -1724,14 +1722,18 @@ static void zfsfuse_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 	zfsfuse_getcred(req, &cred);
 
 	file_info_t *info = (file_info_t *)(uintptr_t) fi->fh;
-	if (info->used) {
-		print_debug(4,"release: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
-		basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
-	}
-	if (info->alloc) {
-		print_debug(4,"release: ino %ld freeing buffer\n",ino);
-		free_info(info);
-		free(info->buffer);
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		if (info->used) {
+			print_debug(4,"release: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
+			basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
+		}
+		if (info->alloc) {
+			print_debug(4,"release: ino %ld freeing buffer\n",ino);
+			free_info(info);
+			free(info->buffer);
+		}
+		pthread_mutex_unlock(&infos.lock);
 	}
 	release_common(req,ino,fi);
 }
@@ -1744,11 +1746,32 @@ static void zfsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 	file_info_t *info = (file_info_t *)(uintptr_t) fi->fh;
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
-	if (info->used) {
-		print_debug(4,"read: flush ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used);
-		basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
-		info->used = 0;
-	}
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		file_info_t *info2 = info;
+		if (!info->used) {
+			// if a same file is opened for reading after it has been opened for
+			// writing and it has some buffers, then the read will not see the
+			// buffers, we have to find them...
+			info2 = get_info(vfs,ino);
+		}
+
+		if (info2 && info2->used) {
+			size_t boff = info2->last_off-info2->used;
+			size_t end = off+size-1;
+			// Make sure the flush is necessary : the 2 buffers must have an
+			// intersection for that. Checked : it's really useful, the test
+			// avoids the flush very often.
+			if ((off >= boff && off < info2->last_off) ||
+					(end >= boff && end < info2->last_off) ||
+					(off <= boff && end >= info2->last_off)) {
+				print_debug(4,"read: flush ino %ld size %zd off %zd\n",ino,info2->used,info2->last_off-info2->used);
+				basic_write(zfsvfs,&cred,ino,info2->buffer,info2->used,info2->last_off-info2->used,info2);
+				info2->used = 0;
+			} 
+		}
+		pthread_mutex_unlock(&infos.lock);
+	} // if (!no_buffers)
 
 	vnode_t *vp = info->vp;
 	ASSERT(vp != NULL);
@@ -1782,6 +1805,7 @@ static void zfsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 	ZFS_EXIT(zfsvfs);
 
+	print_debug(8,"read got error %d bytes %d\n",error,uio.uio_loffset - off);
 	if(!error)
 		fuse_reply_buf(req, outbuf, uio.uio_loffset - off);
 	else
@@ -1790,11 +1814,9 @@ static void zfsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 	kmem_free(outbuf, size);
 }
 
-int no_buffers = 0; // command line switch: no-buffers
-
 static void push(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, file_info_t *info, const char *buf, size_t size, off_t off)
 {
-	if (info->used + size < 128<<10) {
+	if (info->used + size < 128<<10 || info->last_off != off) {
 		if (!info->used || info->last_off == off) {
 			if (info->alloc < info->used + size) {
 				int plus = info->used + size - info->alloc;
@@ -1809,13 +1831,14 @@ static void push(zfsvfs_t *zfsvfs, cred_t *cred, fuse_ino_t ino, file_info_t *in
 			info->last_off = off + size;
 			return;
 		} else { // offset just changed, need to flush
+			if (size >= 4096) {
+				basic_write(zfsvfs, cred,ino,buf,size,off,info); 
+				return;
+			}
 		  print_debug(4,"push: ino %ld offset changed, expected %zd, got %zd\n",ino,info->last_off,off);
 		  basic_write(zfsvfs,cred,ino,info->buffer,info->used,info->last_off-info->used,info);
 		  info->used = 0;
-		  if (size < 4096)
-			  push(zfsvfs, cred,ino,info,buf,size,off);
-		  else
-			  basic_write(zfsvfs, cred,ino,buf,size,off,info); 
+		  push(zfsvfs, cred,ino,info,buf,size,off);
 		  return;
 		}
 	} else {
@@ -1838,19 +1861,34 @@ static void zfsfuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 	zfsvfs_t *zfsvfs = vfs->vfs_data;
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
-	if (fi->flush || info->flags & FSYNC) {
-		if (info->used) {
-			print_debug(4,"write: flushing ino %ld on fsync size %zd off %zd\n",ino,info->used,info->last_off-info->used,info);
-			basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
-			info->used = 0;
-		}
-	}
-	if (!no_buffers && !(fi->flush || (info->flags & FSYNC)) && (size < 4096 || info->used)) {
-		push(zfsvfs,&cred,ino,info,buf,size,off);
-		fuse_reply_write(req, size /* - uio.uio_resid */);
-		return;
-	}
 	print_debug(8,"write ino %ld size %zd off %zd\n",ino,size,off);
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		if (fi->flush || info->flags & FSYNC) {
+			if (info->used) {
+				print_debug(4,"write: flushing ino %ld on fsync size %zd off %zd\n",ino,info->used,info->last_off-info->used,info);
+				basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
+				info->used = 0;
+			}
+		}
+	   	if (!(fi->flush || (info->flags & FSYNC))) {
+			if (!info->used) {
+				file_info_t *info2 = get_info(vfs,ino);
+				if (info2 && info2->used) {
+					print_debug(4,"write: found info from get_info");
+					info = info2; // handle it with buffers then
+				}
+			}
+
+			if (size < 4096 || info->used) {
+				push(zfsvfs,&cred,ino,info,buf,size,off);
+				fuse_reply_write(req, size /* - uio.uio_resid */);
+				pthread_mutex_unlock(&infos.lock);
+				return;
+			}
+		}
+		pthread_mutex_unlock(&infos.lock);
+	} // if (!no_buffers)
 	
 	int error = basic_write(zfsvfs,&cred, ino, buf, size, off, info);
 
@@ -2079,12 +2117,16 @@ static void zfsfuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct f
 	file_info_t *info = (file_info_t *)(uintptr_t) fi->fh;
 	cred_t cred;
 	zfsfuse_getcred(req, &cred);
-	if (info->used) {
-		print_debug(4,"fsync: flushing ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used,info);
-		basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
-		info->used = 0;
-	} else {
-		print_debug(4,"fsync: no info ino %ld\n",ino);
+	if (!no_buffers) {
+		pthread_mutex_lock(&infos.lock);
+		if (info->used) {
+			print_debug(4,"fsync: flushing ino %ld size %zd off %zd\n",ino,info->used,info->last_off-info->used,info);
+			basic_write(zfsvfs,&cred,ino,info->buffer,info->used,info->last_off-info->used,info);
+			info->used = 0;
+		} else {
+			print_debug(4,"fsync: no info ino %ld\n",ino);
+		}
+		pthread_mutex_unlock(&infos.lock);
 	}
 
 	ZFS_VOID_ENTER(zfsvfs);

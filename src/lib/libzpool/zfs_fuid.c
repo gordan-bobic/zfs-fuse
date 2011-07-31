@@ -423,6 +423,11 @@ zfs_fuid_map_id(zfsvfs_t *zfsvfs, uint64_t fuid,
 	domain = zfs_fuid_find_by_idx(zfsvfs, index);
 	ASSERT(domain != NULL);
 
+	/* kidmap_get*bysid functions link to abort, which
+         * is an extremely bad idea for a daemon which is supposed
+         * to never die. So we'll just avoid these calls for now */
+	id = UID_NOBODY;
+	/*
 	if (type == ZFS_OWNER || type == ZFS_ACE_USER) {
 		(void) kidmap_getuidbysid(crgetzone(cr), domain,
 		    FUID_RID(fuid), &id);
@@ -430,6 +435,7 @@ zfs_fuid_map_id(zfsvfs_t *zfsvfs, uint64_t fuid,
 		(void) kidmap_getgidbysid(crgetzone(cr), domain,
 		    FUID_RID(fuid), &id);
 	}
+	*/
 	return (id);
 }
 
