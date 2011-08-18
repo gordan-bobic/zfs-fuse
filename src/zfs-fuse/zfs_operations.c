@@ -374,7 +374,7 @@ out:
     error = VOP_LOOKUP(dvp, "", &vp, NULL, LOOKUP_XATTR |	\
 	    CREATE_XATTR_DIR, NULL, &cred, NULL, NULL, NULL);	\
     if(error || vp == NULL) {					\
-	if (error != EACCES) error = ENOATTR; 			\
+	if (error != EACCES) error = ENOSYS; 			\
 	goto out;						\
     }
 
