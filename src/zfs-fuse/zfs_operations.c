@@ -55,7 +55,7 @@
 // 4 : buffers
 // 8 : read and write calls
 // 16: acls
-#define DEBUG_LEVEL (1|16)
+// #define DEBUG_LEVEL (1|16)
 
 extern acl_t
 __acl_from_xattr(const char *ext_acl_p, size_t size);
