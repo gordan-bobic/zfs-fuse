@@ -363,6 +363,9 @@ out:
 
 /* This macro makes the lookup for the xattr directory, necessary for listxattr
  * getxattr and setxattr */
+/* Never ever return ENOSYS here, even if it's what the function is supposed to do,
+ * because if you do, fuse will consider that xattrs are not available on this fs
+ * and will never call the function again ! */
 #define MY_LOOKUP_XATTR() \
     vfs_t *vfs = (vfs_t *) fuse_req_userdata(req);		\
     zfsvfs_t *zfsvfs = vfs->vfs_data;				\

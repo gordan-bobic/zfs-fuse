@@ -198,17 +198,24 @@ static void new_fs()
 static void destroy_fs(int i)
 {
 	VERIFY(pthread_mutex_lock(&sysmtx) == 0);
-    if (fsinfo[i].se) {
+	struct fuse_session *se = fuse_chan_session(fsinfo[i].ch);
+	if (!se) {
+	    syslog(LOG_WARNING,"session closed by itself");
+	    fsinfo[i].se = NULL;
+	    close(fds[i].fd);
+	    fds[i].fd = -1;
+	    kmem_free(mountpoints[i],fsinfo[i].mntlen+1);
+	} else if (fsinfo[i].se) {
 #ifdef DEBUG
-	fprintf(stderr, "Filesystem %i (%s) is being unmounted\n", i, mountpoints[i]);
+	    fprintf(stderr, "Filesystem %i (%s) is being unmounted\n", i, mountpoints[i]);
 #endif
-	fuse_session_reset(fsinfo[i].se);
-	fuse_session_destroy(fsinfo[i].se);
-	fsinfo[i].se = NULL;
-	close(fds[i].fd);
-	fds[i].fd = -1;
-	kmem_free(mountpoints[i],fsinfo[i].mntlen+1);
-    }
+	    fuse_session_reset(fsinfo[i].se);
+	    fuse_session_destroy(fsinfo[i].se);
+	    fsinfo[i].se = NULL;
+	    close(fds[i].fd);
+	    fds[i].fd = -1;
+	    kmem_free(mountpoints[i],fsinfo[i].mntlen+1);
+	}
 	VERIFY(pthread_mutex_unlock(&sysmtx) == 0);
 }
 
@@ -265,7 +272,7 @@ static void *zfsfuse_listener_loop(void *arg)
 					bufsize = fsinfo[i].bufsize;
 				}
 
-				if (!fsinfo[i].se) {
+				if (!fsinfo[i].se || fuse_chan_session(fsinfo[i].ch) == NULL) {
 				    destroy_fs(i);
 				    continue;
 				}
