@@ -583,6 +583,7 @@ static int raw_getxattr(zfsvfs_t *zfsvfs, fuse_ino_t ino, const char *name,
 	print_debug(1,"function %s\n",__FUNCTION__);
 
 	znode_t *znode;						
+	*new_vp = NULL;
 
 	int error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);		
 	if(error) {							
@@ -601,7 +602,6 @@ static int raw_getxattr(zfsvfs_t *zfsvfs, fuse_ino_t ino, const char *name,
 		if (error != EACCES) error = ENOSYS; 			
 		goto out;						
 	}
-    *new_vp = NULL;
     error = VOP_LOOKUP(vp, (char *) name, new_vp, NULL, 0, NULL, cred, NULL, NULL, NULL);  
 	if (error) {
 		error = ENOATTR;
