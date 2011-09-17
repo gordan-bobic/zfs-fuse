@@ -1217,7 +1217,7 @@ static void zfsfuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
 	if(fi == NULL) {
 		znode_t *znode;
 
-		error = zfs_zget(zfsvfs, ino, &znode, B_TRUE);
+		error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);
 		if(error) {
 			ZFS_EXIT(zfsvfs);
 			/* If the inode we are trying to get was recently deleted
@@ -1925,7 +1925,7 @@ static void zfsfuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
 
 	znode_t *znode;
 
-	error = zfs_zget(zfsvfs, ino, &znode, B_TRUE);
+	error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);
 	if(error) {
 		ZFS_EXIT(zfsvfs);
 		/* If the inode we are trying to get was recently deleted
