@@ -1105,7 +1105,7 @@ zfs_xvattr_set(znode_t *zp, xvattr_t *xvap, dmu_tx_t *tx)
 /* zfs-fuse : the last parameter zget_unlinked should be false for everything
  * outside zfs_operations.c */
 int
-zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp, boolean_t zget_unlinked)
+zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp)
 {
 	dmu_object_info_t doi;
 	dmu_buf_t	*db;
@@ -1148,8 +1148,8 @@ zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp, boolean_t zget_unlin
 
 		mutex_enter(&zp->z_lock);
 		ASSERT3U(zp->z_id, ==, obj_num);
-		if (zp->z_unlinked && !zget_unlinked) {
-            err = ENOENT;
+		if (zp->z_unlinked && ZTOV(zp)->v_count == 0) {
+			err = ENOENT;
 		} else {
 			VN_HOLD(ZTOV(zp));
 			*zpp = zp;
