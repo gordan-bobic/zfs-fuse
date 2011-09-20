@@ -585,7 +585,7 @@ static int raw_getxattr(zfsvfs_t *zfsvfs, fuse_ino_t ino, const char *name,
 	znode_t *znode;						
 	*new_vp = NULL;
 
-	int error = zfs_zget(zfsvfs, ino, &znode, B_FALSE);		
+	int error = zfs_zget(zfsvfs, ino, &znode);		
 	if(error) {							
 		return error;							
 	}								
