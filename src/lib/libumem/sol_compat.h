@@ -127,8 +127,8 @@ static INLINE int thr_create(void *stack_base,
 # ifdef _WIN32
 #  define ec_atomic_inc(a)		InterlockedIncrement(a)
 #  define ec_atomic_inc64(a)    InterlockedIncrement64(a)
-#elif defined(__powerpc) || defined(__powerpc__) ||\
-      defined(__powerpc64) || defined(__powerpc64__)
+# elif defined(__powerpc) || defined(__powerpc__) ||\
+       defined(__powerpc64) || defined(__powerpc64__)
 
 /* This code comes from
  *  http://www.mulle-kybernetik.com/artikel/Optimization/opti-4-atomic.html
@@ -188,6 +188,13 @@ static INLINE uint_t ec_atomic_cas(uint_t *mem, uint_t with, uint_t cmp)
         : "r"    (with), "m" (*(mem)), "0" (cmp)
         : "memory");
   return prev;
+}
+
+# elif defined(__ARMEL__) && defined(__GNUC__)
+static INLINE uint_t ec_atomic_cas(uint_t *mem, uint_t with, uint_t cmp)
+{
+  // Realized on gcc/4.6.x with ldrex/strex instructions
+  return __sync_val_compare_and_swap(mem, cmp, with); 
 }
 # endif
 

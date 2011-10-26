@@ -537,6 +537,20 @@ extern "C" {
 
 #endif
 
+#elif defined(__ARMEL__)
+
+/*
+ * Define processor specifications for ARM platform (little endian)
+ */
+#define _LITTLE_ENDIAN
+#define _LONG_LONG_LTOH
+#define _BIT_FIELDS_LTOH
+
+/*
+ * Define the appropriate "implementation choices" for ARM (little endian)
+ */
+#define _SUNOS_VTOC_16
+
 /*
  * #error is strictly ansi-C, but works as well as anything for K&R systems.
  *  */
