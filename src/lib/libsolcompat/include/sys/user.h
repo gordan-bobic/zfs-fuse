@@ -27,6 +27,7 @@
 #ifndef _SOL_USER_H
 #define _SOL_USER_H
 
+#include_next <sys/user.h>
 #include <sys/proc.h>
 
 #endif
