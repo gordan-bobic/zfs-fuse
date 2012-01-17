@@ -11,13 +11,6 @@
 #include <lzo/lzo1x.h>
 #include <pthread.h>
 
-/* Work-memory needed for compression. Allocate memory in units
-*  * of `lzo_align_t' (instead of `char') to make sure it is properly aligned.
-*   */
-
-#define HEAP_ALLOC(var,size) \
-	    lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
-
 static pthread_mutex_t wrkmem_mtx;
 static int alloc=0, used=0;
 typedef struct {
