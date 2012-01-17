@@ -304,4 +304,8 @@ name:
 }
 #endif
 
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack,"",%progbits
+#endif
+
 #endif	/* _IA32_SYS_ASM_LINKAGE_H */
