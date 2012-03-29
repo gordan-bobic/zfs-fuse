@@ -149,9 +149,7 @@ static void zfsfuse_destroy(void *userdata)
 	 * and we're terminating the process. Therefore we need to
 	 * force unmount since there could still be opened files
 	 */
-	sync();
-	while(do_umount(vfs, exit_fuse_listener) != 0)
-	    sync();
+	while(do_umount(vfs, exit_fuse_listener) != 0);
 #ifdef DEBUG
 	fprintf(stderr, "do_umount() done\n");
 #endif
