@@ -424,7 +424,22 @@ static void read_cfg() {
 
 int main(int argc, char *argv[])
 {
+#ifdef __GNUC__
+#if __GNUC__ == 4 && __GNUC_MINOR__ == 6
+    /* Gcc 4.6 specific bug, when optimizations are enabled.
+     * It's related to the stack, just creating an array like here, copying
+     * data to it so that it's not discarded by the optimizer and forgeting it
+     * fixes the problem.
+     * The problem being that argv is lost when calling parse_args later,
+     * just call zfs-fuse with --pidfile /var/run/zfs-fuse.pid and it won't
+     * create its pid file, it can even crash in some situations. */
+    char *myargv[50];
+    memcpy(myargv,argv,(argc < 50 ? argc : 50)*sizeof(char*));
+#endif
+#endif
+
     VERIFY(0 == sem_init(&daemon_shutdown, 0, 0));
+
     init_mmap();
 	/* one sane default a day keeps GDB away - Rudd-O */
 	fuse_attr_timeout = 0.0;
@@ -447,8 +462,10 @@ int main(int argc, char *argv[])
 
 	if (!block_cache) /* direct IO enabled */
 		syslog(LOG_WARNING,"block cache disabled -- mmap() cannot be used in ZFS filesystems");
-    if (do_init_fusesocket() != 0)
-        return 1;
+	if (do_init_fusesocket() != 0) {
+		printf("could not init fuse socket\n");
+		return 1;
+	}
 	if (cf_daemonize) {
 		do_daemon(cf_pidfile);
 	}
