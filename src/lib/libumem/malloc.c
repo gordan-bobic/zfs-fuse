@@ -441,25 +441,8 @@ realloc(void *buf_arg, size_t newsize)
 	return (buf);
 }
 
-#ifdef __GLIBC__
-static void __attribute__((constructor)) umem_malloc_init_hook(void)
-{
-	if (__malloc_hook != umem_malloc_hook) {
-		umem_startup(NULL, 0, 0, NULL, NULL);
-		__malloc_hook = umem_malloc_hook;
-		__free_hook = umem_free_hook;
-		__realloc_hook = umem_realloc_hook;
-		__memalign_hook = umem_memalign_hook;
-	}
-}
-
-void (*__malloc_initialize_hook)(void) = umem_malloc_init_hook;
-
-#else
 void __attribute__((constructor))
 __malloc_umem_init (void)
 {
 	umem_startup(NULL, 0, 0, NULL, NULL);
 }
-#endif
-
