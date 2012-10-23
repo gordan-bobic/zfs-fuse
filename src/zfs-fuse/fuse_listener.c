@@ -91,9 +91,9 @@ static void fuse_unmount_all();
 
 void zfsfuse_listener_exit()
 {
+    int ret = zfsfuse_listener_stop();
     fuse_unmount_all();
 
-    int ret = zfsfuse_listener_stop();
     ASSERT(0 == ret);
 
 	if(file_info_cache != NULL)
