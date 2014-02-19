@@ -146,6 +146,19 @@ atomic_cas_ptr(volatile void *target, void *cmp,  void *newval)
 	return (oldval);
 }
 
+uint32_t
+atomic_cas_32(volatile uint32_t *target, uint32_t cmp, uint32_t newval)
+{
+	uint32_t oldval;
+
+	pthread_mutex_lock(&atomic_mtx);
+	oldval = *target;
+	if (oldval == cmp)
+		*target = newval;
+	pthread_mutex_unlock(&atomic_mtx);
+	return (oldval);
+}
+
 uint64_t
 atomic_cas_64(volatile uint64_t *target, uint64_t cmp, uint64_t newval)
 {
