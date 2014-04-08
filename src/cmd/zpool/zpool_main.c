@@ -185,10 +185,11 @@ static const char *
 get_usage(zpool_help_t idx) {
 	switch (idx) {
 	case HELP_ADD:
-		return (gettext("\tadd [-fn] <pool> <vdev> ...\n"));
+		return (gettext("\tadd [-fn] [-o property=value] "
+		    "<pool> <vdev> ...\n"));
 	case HELP_ATTACH:
-		return (gettext("\tattach [-f] <pool> <device> "
-		    "<new-device>\n"));
+		return (gettext("\tattach [-f] [-o property=value] "
+		    "<pool> <device> <new-device>\n"));
 	case HELP_CLEAR:
 		return (gettext("\tclear [-nF] <pool> [device]\n"));
 	case HELP_CREATE:
@@ -222,7 +223,7 @@ get_usage(zpool_help_t idx) {
 	case HELP_ONLINE:
 		return (gettext("\tonline <pool> <device> ...\n"));
 	case HELP_REPLACE:
-		return (gettext("\treplace [-f] <pool> <device> "
+		return (gettext("\treplace [-f] [-o property=value] <pool> <device> "
 		    "[new-device]\n"));
 	case HELP_REMOVE:
 		return (gettext("\tremove <pool> <device> ...\n"));
@@ -435,9 +436,11 @@ zpool_do_add(int argc, char **argv)
 	int ret;
 	zpool_handle_t *zhp;
 	nvlist_t *config;
+	nvlist_t *props = NULL;
+	char *propval;
 
 	/* check options */
-	while ((c = getopt(argc, argv, "fn")) != -1) {
+	while ((c = getopt(argc, argv, "fno:")) != -1) {
 		switch (c) {
 		case 'f':
 			force = B_TRUE;
@@ -445,6 +448,21 @@ zpool_do_add(int argc, char **argv)
 		case 'n':
 			dryrun = B_TRUE;
 			break;
+
+		case 'o':
+			if ((propval = strchr(optarg, '=')) == NULL) {
+				(void) fprintf(stderr, gettext("missing "
+				    "'=' for -o option\n"));
+				usage(B_FALSE);
+			}
+			*propval = '\0';
+			propval++;
+
+			if ((strcmp(optarg, ZPOOL_CONFIG_ASHIFT) != 0) ||
+			    (add_prop_list(optarg, propval, &props, B_TRUE)))
+				usage(B_FALSE);
+			break;
+
 		case '?':
 			(void) fprintf(stderr, gettext("invalid option '%c'\n"),
 			    optopt);
@@ -481,7 +499,7 @@ zpool_do_add(int argc, char **argv)
 	}
 
 	/* pass off to get_vdev_spec for processing */
-	nvroot = make_root_vdev(zhp, force, !force, B_FALSE, dryrun,
+	nvroot = make_root_vdev(zhp, props, force, !force, B_FALSE, dryrun,
 	    argc, argv);
 	if (nvroot == NULL) {
 		zpool_close(zhp);
@@ -681,7 +699,7 @@ zpool_do_create(int argc, char **argv)
 	}
 
 	/* pass off to get_vdev_spec for bulk processing */
-	nvroot = make_root_vdev(NULL, force, !force, B_FALSE, dryrun,
+	nvroot = make_root_vdev(NULL, props, force, !force, B_FALSE, dryrun,
 	    argc - 1, argv + 1);
 	if (nvroot == NULL)
 		goto errout;
@@ -2621,14 +2639,31 @@ zpool_do_attach_or_replace(int argc, char **argv, int replacing)
 	nvlist_t *nvroot;
 	char *poolname, *old_disk, *new_disk;
 	zpool_handle_t *zhp;
+	nvlist_t *props = NULL;
+	char *propval;
 	int ret;
 
 	/* check options */
-	while ((c = getopt(argc, argv, "f")) != -1) {
+	while ((c = getopt(argc, argv, "fo:")) != -1) {
 		switch (c) {
 		case 'f':
 			force = B_TRUE;
 			break;
+
+		case 'o':
+			if ((propval = strchr(optarg, '=')) == NULL) {
+				(void) fprintf(stderr, gettext("missing "
+				    "'=' for -o option\n"));
+				usage(B_FALSE);
+			}
+			*propval = '\0';
+			propval++;
+
+			if ((strcmp(optarg, ZPOOL_CONFIG_ASHIFT) != 0) ||
+			    (add_prop_list(optarg, propval, &props, B_TRUE)))
+				usage(B_FALSE);
+			break;
+
 		case '?':
 			(void) fprintf(stderr, gettext("invalid option '%c'\n"),
 			    optopt);
@@ -2685,7 +2720,7 @@ zpool_do_attach_or_replace(int argc, char **argv, int replacing)
 		return (1);
 	}
 
-	nvroot = make_root_vdev(zhp, force, B_FALSE, replacing, B_FALSE,
+	nvroot = make_root_vdev(zhp, props, force, B_FALSE, replacing, B_FALSE,
 	    argc, argv);
 	if (nvroot == NULL) {
 		zpool_close(zhp);
