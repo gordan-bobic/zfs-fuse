@@ -128,6 +128,7 @@ static INLINE int thr_create(void *stack_base,
 #  define ec_atomic_inc(a)		InterlockedIncrement(a)
 #  define ec_atomic_inc64(a)    InterlockedIncrement64(a)
 # elif defined(__powerpc) || defined(__powerpc__) ||\
+       defined(__arm__) || \
        defined(__powerpc64) || defined(__powerpc64__)
 
 /* This code comes from
@@ -167,7 +168,7 @@ static inline int   MulleAtomicDecrement( int *p)
    // code lifted from linux
    asm volatile(
                 "1:     lwarx   %0,0,%1\n"
-                " addic   %0,%0,-1\n"  // addic allows r0, addi doesn't 
+                " addic   %0,%0,-1\n"  // addic allows r0, addi doesn't
                 " stwcx.  %0,0,%1\n"
                 " bne-    1b"
                 : "=&r" (tmp)
@@ -194,9 +195,60 @@ static INLINE uint_t ec_atomic_cas(uint_t *mem, uint_t with, uint_t cmp)
 static INLINE uint_t ec_atomic_cas(uint_t *mem, uint_t with, uint_t cmp)
 {
   // Realized on gcc/4.6.x with ldrex/strex instructions
-  return __sync_val_compare_and_swap(mem, cmp, with); 
+  return __sync_val_compare_and_swap(mem, cmp, with);
 }
 # endif
+#if defined(__arm__)
+
+//#include <asm-arm/irqflags.h>
+
+//typedef struct { volatile int counter; } atomic_t;
+/*
+ * Save the current interrupt enable state & disable IRQs
+ */
+#define raw_local_irq_save(x)					\
+	({							\
+		unsigned long temp;				\
+		(void) (&temp == &x);				\
+	__asm__ __volatile__(					\
+	"mrs	%0, cpsr		@ local_irq_save\n"	\
+"	orr	%1, %0, #128\n"					\
+"	msr	cpsr_c, %1"					\
+	: "=r" (x), "=r" (temp)					\
+	:							\
+	: "memory", "cc");					\
+	})
+
+/*
+ * restore saved IRQ & FIQ state
+ */
+#define raw_local_irq_restore(x)				\
+	__asm__ __volatile__(					\
+	"msr	cpsr_c, %0		@ local_irq_restore\n"	\
+	:							\
+	: "r" (x)						\
+	: "memory", "cc")
+
+typedef uint_t atomic_t;
+static inline uint_t atomic_add_return(int i, atomic_t *v)
+{
+	unsigned long flags;
+	uint_t val;
+
+	raw_local_irq_save(flags);
+//	val = v->counter;
+//	v->counter = val += i;
+	val = *v;
+	*v = val += i;
+	raw_local_irq_restore(flags);
+
+	return val;
+}
+
+#define atomic_inc(v)	 atomic_add_return(1, v)
+#define ec_atomic_inc(v) atomic_inc(v)
+
+#endif
 
 # ifndef ec_atomic_inc
 static INLINE uint_t ec_atomic_inc(uint_t *mem)
@@ -229,7 +281,7 @@ static INLINE uint_t ec_atomic_inc(uint_t *mem)
 
 /* beware! umem only uses these atomic adds for incrementing by 1 */
 #define atomic_add_64(lvalptr, delta) ec_atomic_inc64(lvalptr)
-#define atomic_add_32_nv(a, b)  	  ec_atomic_inc(a) 
+#define atomic_add_32_nv(a, b)  	  ec_atomic_inc(a)
 
 #ifndef NANOSEC
 #define NANOSEC 1000000000

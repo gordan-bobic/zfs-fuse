@@ -539,6 +539,20 @@ extern "C" {
 
 #elif defined(__ARMEL__)
 
+#elif defined(__ARMEL__)
+// From https://bitbucket.org/cli/zfs-fuse-arm/src/865c93c81a95/src/lib/libsolcompat/include/sys/isa_defs.h
+/*
+ * Define processor specifications for ARM platform (little endian)
+ */
+#define _LITTLE_ENDIAN
+#define _LONG_LONG_LTOH
+#define _BIT_FIELDS_LTOH
+
+/*
+ * Define the appropriate "implementation choices" for ARM (little endian)
+ */
+#define _SUNOS_VTOC_16
+
 /*
  * Define processor specifications for ARM platform (little endian)
  */
