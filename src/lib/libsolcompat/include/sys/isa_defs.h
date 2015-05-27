@@ -475,8 +475,11 @@ extern "C" {
 /*
  * Next defines common features between 32 and 64 bit PowerPC
  */
+/* ppc64le has __powerpc64__ but not __BIG_ENDIAN__ */
+#if defined(__BIG_ENDIAN__)
 #ifndef _BIG_ENDIAN
 #define _BIG_ENDIAN
+#endif
 #endif
 #define _STACK_GROWS_DOWNWARD
 #define _LONG_LONG_HTOL
@@ -513,7 +516,9 @@ extern "C" {
 /*
  * Define the appropriate "implementation choices" for PowerPC 64 bit
  */
+#if !defined(_LP64)
 #define _LP64
+#endif
 #if !defined(_I32LPx)
 #define _I32LPx
 #endif
