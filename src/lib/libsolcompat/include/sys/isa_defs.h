@@ -538,8 +538,6 @@ extern "C" {
 #endif
 
 #elif defined(__ARMEL__)
-
-#elif defined(__ARMEL__)
 // From https://bitbucket.org/cli/zfs-fuse-arm/src/865c93c81a95/src/lib/libsolcompat/include/sys/isa_defs.h
 /*
  * Define processor specifications for ARM platform (little endian)
