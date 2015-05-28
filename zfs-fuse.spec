@@ -1,132 +1,260 @@
-# Release tag is supposed to be 0. for prerelease, X. for serial number in this version and alphatag XXXsvn.
-
-Name:          zfs-fuse
-Version:       0.7.0
-Release:       snapshot
-Summary:       The last word in filesystems
-License:       GPL
-Group:         System Environment/Daemons
-URL:           http://zfs-fuse.net/
-Source0:       %{name}-%{version}.tar.bz2
-BuildRoot:     %{_tmppath}/%{name}-%{version}-root
-BuildRequires: fuse-devel libaio-devel zlib-devel scons
-BuildRequires: openssl-devel libattr-devel libacl-devel
+Name:			zfs-fuse
+Version:		0.7.0.20140408
+Release:		1%{?dist}
+Summary:		ZFS ported to Linux FUSE
+Group:			System Environment/Base
+License:		CDDL, GPL
+URL:			http://zfs-fuse.net/
+# The source for this package was pulled from upstream git.  Use the
+# following command to get the tarball:
+#   wget -O zfs-fuse-0.7.0.20140408.tar.gz 'http://rainemu.swishparty.co.uk/cgi-bin/gitweb.cgi?p=zfs;a=snapshot;h=89c0b9f0f43a4296fbccb0f778c6eb203b2dedcf;sf=tgz'
+Source00:		%{name}/%{name}-%{version}.tar.xz
+Source01:		zfs-fuse.init
+Source02:		zfs-fuse.scrub
+Source03:		zfs-fuse.sysconfig
+BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
+Requires:		fuse >= 2.7.4-1
+Requires:		lzo xz zlib bzip2 libaio
+Requires(post):		chkconfig
+Requires(preun):	chkconfig initscripts
+Requires(postun):	initscripts
+# (2010 karsten@redhat.com) zfs-fuse doesn't have s390(x) implementations for atomic instructions
+ExcludeArch:		s390 s390x
+BuildRoot:		%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 %description
-ZFS (formerly the Zettabyte File System), is a filesystem invented by
-Jeff Bonwick, Bill Moore and others at Sun Microsystems.  It is the most
-reliable and tested filesystem ever invented, and it has a feature set
-that sets it apart from anything that came before:
+ZFS is an advanced modern general-purpose filesystem from Sun
+Microsystems, originally designed for Solaris/OpenSolaris.
 
-1. Provable integrity - it checksums all data (and meta-data), which makes it
-possible to detect hardware errors (hard disk corruption, flaky IDE cables..).
-ZFS helped to detect a faulty power supply after only two hours of usage,
-which was previously silently corrupting data for almost a year.
+This project is a port of ZFS to the FUSE framework for the Linux
+operating system.
 
-2. Atomic, transactional updates - means that the on-disk state is consistent
-at all times, there's no need to perform a lengthy filesystem check after
-forced reboots/power failures. 
-
-3. Instantaneous snapshots and clones - it makes it possible to have hourly,
-daily and weekly backups efficiently, as well as experiment with new system
-configurations without any risks.
-
-4. Built-in (optional) compression 
-
-6. Pooled storage model - creating filesystems is as easy as creating a new
-directory. You can efficiently have thousands of filesystems, each with it's
-own quotas and reservations, and different properties (compression algorithm,
-checksum algorithm, etc..). 
-
-5. Very high scalability.  You can have an almost infinite number of snapshots
-and more files / bytes in your filesystems than it is even theoretically
-possible to store with every atom in Earth.  Performance scales linearly
-with the number of mirrors you add to your pool.
-
-6. Built-in stripes (RAID-0), mirrors (RAID-1) and RAID-Z (it's like software
-RAID-5, but without the requirement of uninterruptible power or battery-
-backed power to prevent catastrophes due to sudden power outages.
-It is more efficient in resyncing failed arrays due to ZFS's copy-on-write
-transactional model. 
-
-...and many others (variable sector sizes, adaptive endianness, incremental
-backups over the network...)
-
-This project is a port of the ZFS filesystem to FUSE/Linux, done as part of the
-Google Summer of Code 2006 initiative.
-
-
+Project home page is at http://zfs-fuse.net/
 
 %prep
-%setup -q 
+%setup -q
+
+f=LICENSE
+%{__mv} $f $f.iso88591
+iconv -o $f -f iso88591 -t utf8 $f.iso88591
+%{__rm} -f $f.iso88591
 
 %build
-cd src
+export CCFLAGS="%{optflags}"
+pushd src
+
 scons debug=0
 
 %install
-[ "$RPM_BUILD_ROOT" != "/" ] && [ -d $RPM_BUILD_ROOT ] && rm -rf $RPM_BUILD_ROOT;
-mkdir -p $RPM_BUILD_ROOT%_sbindir
-mkdir -p $RPM_BUILD_ROOT%{_initrddir} $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig
-install -m755 contrib/%{name}.initd.fedora $RPM_BUILD_ROOT%{_initrddir}/%{name}
-install -m644 contrib/%{name}.sysconfig $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/%{name}
-ln -s %{_sysconfdir}/init.d/%{name} $RPM_BUILD_ROOT%_sbindir/rc%{name}
-mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8
-install -m 644 doc/*.8 $RPM_BUILD_ROOT%{_mandir}/man8
-cd src
-scons install install_dir=$RPM_BUILD_ROOT%_sbindir man_dir=$RPM_BUILD_ROOT%_mandir/man8/
+%{__rm} -rf %{buildroot}
+pushd src
+scons debug=0 install install_dir=%{buildroot}%{_bindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
+%{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+%{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
+%{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
+
+#set stack not executable, BZ 911150
+for i in zdb zfs zfs-fuse zpool ztest; do
+       /usr/bin/execstack -c %{buildroot}%{_bindir}/$i
+done
 
 %clean
-[ "$RPM_BUILD_ROOT" != "/" ] && [ -d $RPM_BUILD_ROOT ] && rm -rf $RPM_BUILD_ROOT;
+%{__rm} -rf %{buildroot}
+
+%post
+# echo "Post: $1 packages"
+
+# Move cache if upgrading
+oldcache=/etc/zfs/zpool.cache      # this changed per 0.6.9, only needed when upgrading from earlier versions
+newcache=/var/lib/zfs/zpool.cache
+
+if [[ -f $oldcache && ! -e $newcache ]]; then
+  echo "Moving existing zpool.cache to new location"
+  mkdir -p $(dirname $newcache)
+  mv $oldcache $newcache
+else
+  if [ -e $oldcache ]; then
+    echo "Note: old zpool.cache present but no longer used ($oldcache)"
+  fi
+fi
+
+if [ $1 = 1 ] ; then
+    /sbin/chkconfig --add %{name}
+fi
+
+%preun
+# echo "Preun: $1 packages"
+if [ $1 = 0 ] ; then
+    echo "Stopping service since we are uninstalling last package"
+    /sbin/service %{name} stop >/dev/null 2>&1 || :
+    /sbin/chkconfig --del %{name}
+fi
+
+%postun
+# echo "Postun: $1 packages"
+if [ $1 -ge 1 ] ; then
+    echo "Restarting since we have updated the package"
+    /sbin/service %{name} condrestart >/dev/null 2>&1 || :
+else
+    echo "Removing files since we removed the last package"
+    rm -rf /var/run/zfs
+    rm -rf /var/lock/zfs
+fi
 
 %files
-%defattr(-,root,root)
-%doc BUGS CHANGES HACKING INSTALL LICENSE README README.NFS STATUS TESTING TODO
-%doc %{_mandir}/man8/*
+%defattr(-, root, root, -)
+%doc BUGS CHANGES contrib HACKING LICENSE README 
+%doc README.NFS STATUS TESTING TODO
+%{_bindir}/zdb
+%{_bindir}/zfs
+%{_bindir}/zfs-fuse
+%{_bindir}/zpool
+%{_bindir}/zstreamdump
+%{_bindir}/ztest
 %{_initrddir}/%{name}
+%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
-%_sbindir/rc%{name}
-%{_sbindir}/zdb
-%{_sbindir}/zfs
-%{_sbindir}/zpool
-%{_sbindir}/ztest
-%{_sbindir}/zfs-fuse
-%{_sbindir}/zstreamdump
+%{_sysconfdir}/%{name}/zfs_pool_alert
+%{_mandir}/man8/zfs-fuse.8.gz
+%{_mandir}/man8/zdb.8.gz
+%{_mandir}/man8/zfs.8.gz
+%{_mandir}/man8/zpool.8.gz
+%{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
-* Fri Oct 01 2010 Seth Heeren <zfs-fuse@sehe.nl> 0.7.0-0
-- Release 0.7.0
+* Fri Feb 21 2014 Gordan Bobic <gordan@redsleeve.org> - 0.7.0.20140408-1
+- Added ashift setting support (Ray Vantassle)
+- Additional ARM patches (Ray Vantassle)
+- Backport extra Fedora patches that were added earlier
 
-* Tue Jun 01 2010 Seth Heeren <zfs-fuse@sehe.nl> 0.6.9-0
-- Release 0.6.9 as is in preparation for 0.7.0
+* Tue Aug 13 2013 Gordan Bobic <gordan@redsleeve.org> - 0.7.0.20131023-5
+- Update to Emmanuel Anne's latest branch for pool v26 support.
+- New compression dependencies and spec/build cleanup.
 
-* Sun Dec 06 2009 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com> 0.6.0-1
-- Release 0.6.0 as is in preparation for 0.7.0
+* Fri Feb 15 2013 Jon Ciesla <limburgher@gmail.com> - 0.7.0-3
+- Patch to add stack-protector and FORTIFY_SOURCE, BZ 911150.
+- Set stack not executable on some binaries, BZ 911150.
 
-* Wed Sep 02 2009 Lenz Grimmer <lenz@grimmer.com> 0.6.0-0.0.433snapshot
-- Added man pages to the package
+* Tue Feb 28 2012 Jon Ciesla <limburgher@gmail.com> - 0.7.0-2
+- Fixed sysconfig permissions, BZ 757488.
 
-* Sat Aug 15 2009 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com> 0.6.0-0.0.433snapshot
-- Bumped to 0.6.0
+* Mon Feb 27 2012 Jon Ciesla <limburgher@gmail.com> - 0.7.0-1
+- New upstream, fix FTBFS BZ 716087.
+- Patch out bad umem declaration.
+- Stop starting automatically in post. BZ 755464.
+- Marked sysconfig file noreplace, BZ 772403.
+- Setting weekly scrub to off by default in sysconfig to silence crob job if service disabled, BZ 757488 et. al.
 
-* Fri Aug 14 2009 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com> 0.5.1-0.0.432snapshot
-- Included /etc/sysconfig/zfs-fuse to provide command-line options for ZFS in a config file
 
-* Fri Aug 14 2009 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com> 0.5.1-0.0.431snapshot
-- Thanks to Emmanuel Anne, we now conform to POSIX according to the NTFS-3G suite
 
-* Fri Aug 14 2009 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com> 0.5.1-0.0.414svn
-- Renamed version / release to Fedora versioning policy (compatible with all RPM distros)
-- Used Fedora init script (more reliable, performs more checks)
+* Sat Jan 14 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.6.9-9.20100709git
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_17_Mass_Rebuild
 
-* Fri Aug 14 2009 Lenz Grimmer <lenz@grimmer.com>
-- Updated to version 0.5.1r414 (hg snapshot taken from http://git.rudd-o.com/zfs/)
-* Mon Dec 15 2008 Lenz Grimmer <lenz@grimmer.com>
-- Updated to version 0.5.0r375 (hg snapshot)
-- Removed build patch (now included upstream)
-* Thu Sep 18 2008 Lenz Grimmer <lenz@grimmer.com>
-- Updated to version 0.5.0
-* Tue Aug 26 2008 Lenz Grimmer <lenz@grimmer.com>
-- Added rczfs-fuse convenience symlink
-* Sun Aug 24 2008 Lenz Grimmer <lenz@grimmer.com>
-- Initial package, based on hg revision 346 of the trunk
+* Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.6.9-8.20100709git
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
+
+* Sun Aug 01 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9-7.20100709git
+- Moved to fedpkg and git
+- Fixed missing dependency to libaio
+
+* Fri Jul 09 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9-6.20100709git
+- Updated to upstream maintenance snapshot.
+- Fixes build problems on EL5
+- Added zfs-fuse man page
+- Removed package patching of linked libraries
+
+* Mon Jul 05 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9-5
+- Cleanup of RPM spec and init script
+
+* Sun Jul 04 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9-4
+- Patched SConstruct to define NDEBUG instead of DEBUG to avoid debug code while still generating debug symbols
+- Added moving of zfs.cache when updating from pre 0.6.9 version
+
+* Sat Jul 03 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9-2
+- Updated to upstream stable release 0.6.9
+- Patched default debug level from 0 to 1
+- Fixed missing compiler flags and debug flag in build: BUG 595442
+
+* Sat May 22 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.9_beta3-6
+- Updated to upstream version 0.6.9_beta3
+- Add more build requires to build on F13 BUG 565076
+- Add patches for missing libraries and includes to build on F13 BUG 565076
+- Added packages for ppc and ppc64
+- Build on F13 BUG 565076
+- Fixes BUG 558172
+- Added man files
+- Added zfs_pool_alert
+- Added zstreamdump
+- Fixed bug in automatic scrub script BUG 559518
+
+* Mon Jan 04 2010 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-6
+- Added option for automatic weekly scrubbing.
+  Set ZFS_WEEKLY_SCRUB=yes in /etc/sysconfig/zfs-fuse to enable
+- Changed ZFS_AUTOMOUNT option value from "1" to "yes" for better readability.
+  ZFS_AUTOMOUNT=1 deprecated and will be removed in version 0.7.0.
+- Added option for killing processes with unknown working directory at zfs-fuse startup.
+  This would be the case if zfs-fuse crashed.  Use with care.  It may kill unrelated processes.
+  Set ZFS_KILL_ORPHANS=yes_really in /etc/sysconfig/zfs-fuse to enable.
+- Relaxed dependency on fuse from 2.8.0 to 2.7.4 to allow installation on RHEL/Centos 5
+
+* Sat Dec 26 2009 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-5
+- Removed chckconfig on and service start commands from install script
+  See https://fedoraproject.org/wiki/Packaging:SysVInitScript#Why_don.27t_we
+
+* Sat Dec 26 2009 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-4
+- Updated to upstream version 0.6.0 STABLE
+
+* Mon Nov 30 2009 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-3
+- Updated the home page URL to http://zfs-fuse.net/
+
+* Sat Nov 28 2009 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-2
+- Corrected some KOJI build errors.
+
+* Fri Nov 27 2009 Uwe Kubosch <uwe@kubosch.no> - 0.6.0-1
+- Updated to upstream version 0.6.0 BETA
+- Updated dependency to Fuse 2.8.0
+- Minor change in spec: Source0 to Source00 for consistency
+
+* Mon Jul 27 2009 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.0-9.20081221.1
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_12_Mass_Rebuild
+
+* Wed Jun 10 2009 Karsten Hopp <karsten@redhat.com> 0.5.0-8.20081221.1
+- excludearch s390, s390x as there is no implementation for atomic instructions
+
+* Wed Feb 25 2009 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 0.5.0-8.20081221
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_11_Mass_Rebuild
+
+* Sat Jan 24 2009 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-7.20081221
+- Updated etc/init.d/zfs-fuse init script after feedback from Rudd-O
+  Removed limits for the fuse process which could lead to a hung system
+  or use lots of memory.
+
+* Sun Dec 28 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-6.20081221
+- Updated etc/init.d/zfs-fuse init script after feedback from Rudd-O at
+  http://groups.google.com/group/zfs-fuse/browse_thread/thread/da94aa803bceef52
+- Adds better wait at startup before mounting filesystems.
+- Add OOM kill protection.
+- Adds syncing of disks at shutdown.
+- Adds pool status when asking for service status.
+- Changed to start zfs-fuse at boot as default.
+- Changed to start zfs-fuse right after installation.
+- Cleanup of /var/run/zfs and /var/lock/zfs after uninstall.
+
+* Sun Dec 24 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-5.20081221
+- Development tag.
+
+* Sun Dec 21 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-4.20081221
+- Updated to upstream trunk of 2008-12-21
+- Added config file in /etc/sysconfig/zfs
+- Added config option ZFS_AUTOMOUNT=0|1 to mount filesystems at boot
+
+* Tue Nov 11 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-3.20081009
+- Rebuild after import into Fedora build system.
+
+* Thu Oct 09 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-2.20081009
+- Updated to upstream trunk of 2008-10-09
+- Adds changes to make zfs-fuse build out-of-the-box on Fedora 9,
+  and removes the need for patches.
+
+* Sat Oct  4 2008 Terje Rosten <terje.rosten@ntnu.no> - 0.5.0-1 
+- initial build

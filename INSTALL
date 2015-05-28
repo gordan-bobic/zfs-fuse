@@ -29,11 +29,10 @@ from compiling correctly, simply upgrade to FUSE-2.6.0 or later).
    Only needed for compilation.
    Website: http://www.scons.org
 
-Currently, it only works on the x86, amd64 and sparc64 architectures.
+It has been tested on the x86, amd64, sparc64 and arm architectures.
 
 In order to use pools created on Solaris, you will probably need kernel
-support for GPT/EFI partitions. EVMS is highly recommended in this case,
-see http://evms.sourceforge.net
+support for GPT/EFI partitions.
 
 Compiling
 ---------
