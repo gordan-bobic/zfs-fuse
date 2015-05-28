@@ -1,9 +1,11 @@
+%global	_sbindir	/sbin
+
 Name:			zfs-fuse
 Version:		0.7.0.20140408
 Release:		1%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
-License:		CDDL, GPL
+License:		CDDL
 URL:			http://zfs-fuse.net/
 # The source for this package was pulled from upstream git.  Use the
 # following command to get the tarball:
@@ -48,14 +50,14 @@ scons debug=0
 %install
 %{__rm} -rf %{buildroot}
 pushd src
-scons debug=0 install install_dir=%{buildroot}%{_bindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
+scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
 %{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
 
 #set stack not executable, BZ 911150
 for i in zdb zfs zfs-fuse zpool ztest; do
-       /usr/bin/execstack -c %{buildroot}%{_bindir}/$i
+       /usr/bin/execstack -c %{buildroot}%{_sbindir}/$i
 done
 
 %clean
@@ -105,12 +107,12 @@ fi
 %defattr(-, root, root, -)
 %doc BUGS CHANGES contrib HACKING LICENSE README 
 %doc README.NFS STATUS TESTING TODO
-%{_bindir}/zdb
-%{_bindir}/zfs
-%{_bindir}/zfs-fuse
-%{_bindir}/zpool
-%{_bindir}/zstreamdump
-%{_bindir}/ztest
+%{_sbindir}/zdb
+%{_sbindir}/zfs
+%{_sbindir}/zfs-fuse
+%{_sbindir}/zpool
+%{_sbindir}/zstreamdump
+%{_sbindir}/ztest
 %{_initrddir}/%{name}
 %{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
