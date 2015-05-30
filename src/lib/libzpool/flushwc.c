@@ -16,9 +16,10 @@
 #include <string.h>
 #include <linux/hdreg.h>
 #include <linux/major.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/mount.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -116,6 +117,17 @@ static int flushATAwc(int fd) {
   return ioctl(fd, HDIO_DRIVE_CMD, ata_command) == 0 ? 0 : EIO;
 }
 
+static int flushGENwc(int fd) {
+  int fret;
+
+  fret = fsync(fd);
+
+  if (!fret)
+    return ioctl(fd, BLKFLSBUF, 0);
+  else
+    return fret;
+}
+
 /*
  * This function flushes the write cache on ATA, SATA, and SCSI
  * hard drives. It is mostly a wrapper, choosing between flushATAwc and
@@ -130,12 +142,14 @@ static int flushATAwc(int fd) {
  */
 int flushwc(vnode_t *vn) {
   int major_number;
+  int minor_number;
 
   if(!S_ISBLK(vn->v_stat.st_mode))
     // We can only flush the write cache of a block device.
     return ENOTSUP;
 
   major_number = major(vn->v_stat.st_rdev);
+  minor_number = minor(vn->v_stat.st_rdev);
 
   switch(major_number) {
   case SCSI_DISK0_MAJOR:
@@ -154,7 +168,13 @@ int flushwc(vnode_t *vn) {
   case SCSI_DISK13_MAJOR:
   case SCSI_DISK14_MAJOR:
   case SCSI_DISK15_MAJOR:
-    return flushSCSIwc(vn->v_fd);
+    /* SCSI block devices have up to 15 partitions, so if any of the 
+     * last 4 bits in the minor number are set, it's a partition.
+     */
+    if (minor_number & 0xF == minor_number)
+      return flushSCSIwc(vn->v_fd);
+    else
+      return flushGENwc(vn->v_fd);
   case IDE0_MAJOR:
   case IDE1_MAJOR:
   case IDE2_MAJOR:
@@ -165,9 +185,15 @@ int flushwc(vnode_t *vn) {
   case IDE7_MAJOR:
   case IDE8_MAJOR:
   case IDE9_MAJOR:
-    return flushATAwc(vn->v_fd);
+    /* IDE/ATA block devices have up to 63 partitions, so if any of the
+     * last 6 bits in the minor number are set, it's a partition.
+     */
+    if (minor_number & 0x3F == minor_number)
+      return flushATAwc(vn->v_fd);
+    else
+      return flushGENwc(vn->v_fd);
   default:
-    //Unknown block device driver. Can't flush the write cache.
-    return ENOTSUP;
+    //Unknown block device driver. We try using the generic method.
+    return flushGENwc(vn->v_fd);
   }
 }
