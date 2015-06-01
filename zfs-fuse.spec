@@ -1,7 +1,7 @@
 %global	_sbindir	/sbin
 
 Name:			zfs-fuse
-Version:		0.7.0.20140408
+Version:		0.7.1
 Release:		1%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
