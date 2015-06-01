@@ -11,7 +11,12 @@ URL:			http://zfs-fuse.net/
 # following command to get the tarball:
 #   wget -O zfs-fuse-0.7.0.20140408.tar.gz 'http://rainemu.swishparty.co.uk/cgi-bin/gitweb.cgi?p=zfs;a=snapshot;h=89c0b9f0f43a4296fbccb0f778c6eb203b2dedcf;sf=tgz'
 Source00:		%{name}/%{name}-%{version}.tar.xz
+%if %{?rhel} <= 6
 Source01:		zfs-fuse.init
+%else
+Source01:		zfs-fuse.service
+Source04:		zfs-fuse-helper
+%endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
@@ -51,7 +56,12 @@ scons debug=0
 %{__rm} -rf %{buildroot}
 pushd src
 scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
+%if 0%{?rhel} <= 6
 %{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+%else
+%{__install} -Dp -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
+%{__install} -Dp -m 0755 %{SOURCE4} %{buildroot}%{_sbindir}/%{name}-helper
+%endif
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
 
@@ -80,23 +90,36 @@ else
   fi
 fi
 
-if [ $1 = 1 ] ; then
+if [ $1 -eq 1 ] ; then
+%if 0%{?rhel} <= 6
     /sbin/chkconfig --add %{name}
+%else
+    /bin/systemctl daemon-reload > /dev/null 2>&1 || :
+%endif
 fi
 
 %preun
 # echo "Preun: $1 packages"
-if [ $1 = 0 ] ; then
+if [ $1 -eq 0 ] ; then
     echo "Stopping service since we are uninstalling last package"
+%if 0%{?rhel} <= 6
     /sbin/service %{name} stop >/dev/null 2>&1 || :
     /sbin/chkconfig --del %{name}
+%else
+    /bin/systemctl --no-reload disable zfs-fuse.service > /dev/null 2>&1 || :
+    /bin/systemctl stop zfs-fuse.service > /dev/null 2>&1 || :
+%endif
 fi
 
 %postun
 # echo "Postun: $1 packages"
 if [ $1 -ge 1 ] ; then
     echo "Restarting since we have updated the package"
+%if 0%{?rhel} <= 6
     /sbin/service %{name} condrestart >/dev/null 2>&1 || :
+%else
+    /bin/systemctl try-restart zfs-fuse.service > /dev/null || :
+%endif
 else
     echo "Removing files since we removed the last package"
     rm -rf /var/run/zfs
@@ -113,7 +136,12 @@ fi
 %{_sbindir}/zpool
 %{_sbindir}/zstreamdump
 %{_sbindir}/ztest
+%if 0%{?rhel} <= 6
 %{_initrddir}/%{name}
+%else
+%{_unitdir}/%{name}.service
+%{_sbindir}/%{name}-helper
+%endif
 %{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %{_sysconfdir}/%{name}/zfs_pool_alert
@@ -124,7 +152,7 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
-* Fri Feb 21 2014 Gordan Bobic <gordan@redsleeve.org> - 0.7.0.20140408-1
+* Mon Jun 01 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-1
 - Added ashift setting support (Ray Vantassle)
 - Additional ARM patches (Ray Vantassle)
 - Backport extra Fedora patches that were added earlier
@@ -242,7 +270,7 @@ fi
 - Changed to start zfs-fuse right after installation.
 - Cleanup of /var/run/zfs and /var/lock/zfs after uninstall.
 
-* Sun Dec 24 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-5.20081221
+* Wed Dec 24 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-5.20081221
 - Development tag.
 
 * Sun Dec 21 2008 Uwe Kubosch <uwe@kubosch.no> - 0.5.0-4.20081221

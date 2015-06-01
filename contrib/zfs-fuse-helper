@@ -4,7 +4,7 @@
 . /etc/rc.d/init.d/functions
 
 prog="zfs-fuse"
-exec="/usr/bin/$prog"
+exec="/sbin/$prog"
 config=/etc/sysconfig/$prog
 
 [ -e $config ] && . $config
@@ -174,7 +174,7 @@ restart() {
 
 pool_status() {
     # run checks to determine if the service is running or use generic status
-    status $prog && /usr/bin/zpool status
+    status $prog && /sbin/zpool status
 }
 
 pool_status_quiet() {

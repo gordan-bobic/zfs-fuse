@@ -5,8 +5,8 @@ After=syslog.target
 [Service]
 Type=forking
 PrivateTmp=True
-ExecStart=/usr/bin/zfs-fuse-helper start
-ExecStop==/usr/bin/zfs-fuse-helper stop
+ExecStart=/sbin/zfs-fuse-helper start
+ExecStop=/sbin/zfs-fuse-helper stop
 
 [Install]
 WantedBy=multi-user.target
