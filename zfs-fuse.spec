@@ -2,29 +2,31 @@
 
 Name:			zfs-fuse
 Version:		0.7.1
-Release:		1%{?dist}
+Release:		2%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
 License:		CDDL
-URL:			http://zfs-fuse.net/
-# The source for this package was pulled from upstream git.  Use the
-# following command to get the tarball:
-#   wget -O zfs-fuse-0.7.0.20140408.tar.gz 'http://rainemu.swishparty.co.uk/cgi-bin/gitweb.cgi?p=zfs;a=snapshot;h=89c0b9f0f43a4296fbccb0f778c6eb203b2dedcf;sf=tgz'
+URL:			https://github.com/gordan-bobic/zfs-fuse
 Source00:		%{name}/%{name}-%{version}.tar.xz
 %if %{?rhel} <= 6
 Source01:		zfs-fuse.init
 %else
 Source01:		zfs-fuse.service
-Source04:		zfs-fuse-helper
 %endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
 Requires:		lzo xz zlib bzip2 libaio
+%if %{?rhel} <= 6
 Requires(post):		chkconfig
 Requires(preun):	chkconfig initscripts
 Requires(postun):	initscripts
+%else
+Requires(post):		systemd
+Requires(preun):	systemd
+Requires(postun):	systemd
+%endif
 # (2010 karsten@redhat.com) zfs-fuse doesn't have s390(x) implementations for atomic instructions
 ExcludeArch:		s390 s390x
 BuildRoot:		%{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -50,7 +52,7 @@ iconv -o $f -f iso88591 -t utf8 $f.iso88591
 export CCFLAGS="%{optflags}"
 pushd src
 
-scons debug=0
+scons --cache-disable --quiet debug=0 %{_smp_mflags}
 
 %install
 %{__rm} -rf %{buildroot}
@@ -60,7 +62,6 @@ scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{
 %{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %else
 %{__install} -Dp -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
-%{__install} -Dp -m 0755 %{SOURCE4} %{buildroot}%{_sbindir}/%{name}-helper
 %endif
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
@@ -140,7 +141,6 @@ fi
 %{_initrddir}/%{name}
 %else
 %{_unitdir}/%{name}.service
-%{_sbindir}/%{name}-helper
 %endif
 %{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
@@ -152,6 +152,10 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
+* Tue Jun 09 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-2
+- Improved systemd integration
+- .spec clean-up
+
 * Mon Jun 01 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-1
 - Added ashift setting support (Ray Vantassle)
 - Additional ARM patches (Ray Vantassle)
