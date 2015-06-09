@@ -3,10 +3,10 @@ Description=zfs-fuse daemon
 After=syslog.target
 
 [Service]
-Type=forking
-PrivateTmp=True
-ExecStart=/sbin/zfs-fuse-helper start
-ExecStop=/sbin/zfs-fuse-helper stop
+Type=simple
+ExecStart=/sbin/zfs-fuse --no-daemon --pidfile /var/run/zfs-fuse.pid
+PIDFile=/var/run/zfs-fuse.pid
+SuccessExitStatus=1
 
 [Install]
 WantedBy=multi-user.target
