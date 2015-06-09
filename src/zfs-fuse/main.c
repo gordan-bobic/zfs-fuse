@@ -32,6 +32,7 @@
 #include <sys/list.h>
 #include <sys/zfs_debug.h>
 #include <semaphore.h>
+#include <unistd.h>
 
 #include "util.h"
 #include "fuse_listener.h"
@@ -424,6 +425,9 @@ static void read_cfg() {
 
 int main(int argc, char *argv[])
 {
+    if (access("/etc/initrd-release", F_OK) >= 0)
+        argv[0][0] = '@';
+
 #ifdef __GNUC__
 #if __GNUC__ == 4 && __GNUC_MINOR__ == 6
     /* Gcc 4.6 specific bug, when optimizations are enabled.
