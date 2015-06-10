@@ -46,6 +46,11 @@
 #define BLKGETSIZE64 _IOR(0x12,114,size_t)
 #endif
 
+#define MS_USERS	(MS_NOEXEC|MS_NOSUID|MS_NODEV)
+#define MS_OWNER	(MS_NOSUID|MS_NODEV)
+#define MS_GROUP	(MS_NOSUID|MS_NODEV)
+#define MS_COMMENT	0
+
 #define MS_FORCE     MNT_FORCE
 #define MS_OVERLAY   32768
 #define MS_NOMNTTAB  0         /* Not supported in Linux */
