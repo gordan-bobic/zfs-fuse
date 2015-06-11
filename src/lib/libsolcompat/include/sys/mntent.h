@@ -39,7 +39,14 @@ extern "C" {
 #define	VFSTAB		"/etc/vfstab"
 #define	MNTMAXSTR	128
 
-#define	MNTTYPE_ZFS	"fuse.zfs"		/* ZFS file system */
+#define MOUNT_SUCCESS	0x00		/* Success */
+#define MOUNT_USAGE	0x01		/* Invalid invocation or permissions */
+#define MOUNT_SYSERR	0x02		/* System error (ENOMEM, etc) */
+#define MOUNT_SOFTWARE	0x04		/* Internal mount bug */
+#define MOUNT_FILEIO	0x10		/* Error updating/locking /etc/mtab */
+#define MOUNT_BUSY	0x80		/* Mount failed due to EBUSY */
+
+#define	MNTTYPE_ZFS	"fuse.zfs"	/* ZFS file system */
 #define	MNTTYPE_UFS	"ufs"		/* Unix file system */
 #define	MNTTYPE_NFS	"nfs"		/* NFS file system */
 #define	MNTTYPE_NFS3	"nfs3"		/* NFS Version 3 file system */
@@ -78,6 +85,8 @@ extern "C" {
 #define	MNTOPT_GRPID	"grpid"		/* SysV-compatible gid on create */
 #define	MNTOPT_REMOUNT	"remount"	/* Change mount options */
 #define	MNTOPT_NOSUB	"nosub"		/* Disallow mounts on subdirs */
+#define MNTOPT_QUIET	"quiet"		/* quiet mount */
+#define MNTOPT_LOUD	"loud"		/* verbose mount */
 #define	MNTOPT_MULTI	"multi"		/* Do multi-component lookup */
 #define	MNTOPT_INTR	"intr"		/* Allow NFS ops to be interrupted */
 #define	MNTOPT_NOINTR	"nointr"	/* Don't allow interrupted ops */
@@ -119,20 +128,48 @@ extern "C" {
 #define	MNTOPT_LOGGING "logging" 	/* enable logging */
 #define	MNTOPT_NOLOGGING "nologging" 	/* disable logging */
 #define	MNTOPT_ATIME	"atime"		/* update atime for files */
-#define	MNTOPT_NOATIME  "noatime"	/* do not update atime for files */
+#define	MNTOPT_NOATIME	"noatime"	/* do not update atime for files */
+#define MNTOPT_CONTEXT	"context"	/* selinux context */
+#define MNTOPT_FSCONTEXT "fscontext"	/* selinux fscontext */
+#define MNTOPT_DEFCONTEXT "defcontext"	/* selinux defcontext */
+#define MNTOPT_ROOTCONTEXT "rootcontext" /* selinux rootcontext */
 #define	MNTOPT_GLOBAL	"global"	/* Cluster-wide global mount */
 #define	MNTOPT_NOGLOBAL	"noglobal"	/* Mount local to single node */
 #define	MNTOPT_DFRATIME	"dfratime"	/* Deferred access time updates */
 #define	MNTOPT_NODFRATIME "nodfratime"	/* No Deferred access time updates */
 #define	MNTOPT_NBMAND	"nbmand"	/* allow non-blocking mandatory locks */
 #define	MNTOPT_NONBMAND	"nonbmand"	/* deny non-blocking mandatory locks */
+#define MNTOPT_BIND	"bind"		/* remount part of a tree */
+#define MNTOPT_RBIND	"rbind"		/* include subtrees */
 #define	MNTOPT_XATTR	"xattr"		/* enable extended attributes */
 #define	MNTOPT_NOXATTR	"noxattr"	/* disable extended attributes */
+#define MNTOPT_COMMENT	"comment"	/* comment */
+#define MNTOPT_ZFSUTIL	"zfsutil"	/* called by zfs utility */
+#define MNTOPT_NODIRATIME "nodiratime"	/* do not update atime for dirs */
+#define MNTOPT_DIRSYNC	"dirsync"	/* do dir updates synchronously */
 #define	MNTOPT_EXEC	"exec"		/* enable executables */
 #define	MNTOPT_NOEXEC	"noexec"	/* disable executables */
+#define MNTOPT_GROUP	"group"		/* allow group mount */
+#define MNTOPT_NOGROUP	"nogroup"	/* do not allow group mount */
+#define MNTOPT_IVERSION	"iversion"	/* update inode version */
+#define MNTOPT_NOIVERSION "noiversion"	/* do not update inode version */
+#define MNTOPT_NETDEV	"_netdev"	/* network device */
+#define MNTOPT_NOFAIL	"nofail"	/* no failure */
+#define MNTOPT_RELATIME	"relatime"	/* allow relative time updates */
+#define MNTOPT_NORELATIME "norelatime"	/* do not allow relative time updates */
+#define MNTOPT_OWNER	"owner"		/* allow owner mount */
+#define MNTOPT_SYNC	"sync"		/* all I/O is synchronous */
+#define MNTOPT_USER	"user"		/* allow user mount */
+#define MNTOPT_USERS	"users"		/* allow user mount */
+#define MNTOPT_ACL	"acl"		/* passed by util-linux-2.24 mount */
+#define MNTOPT_NOACL	"noacl"		/* likewise */
+#define MNTOPT_POSIXACL	"posixacl"	/* likewise */
 #define	MNTOPT_RESTRICT	"restrict"	/* restricted autofs mount */
 #define	MNTOPT_BROWSE	"browse"	/* browsable autofs mount */
 #define	MNTOPT_NOBROWSE	"nobrowse"	/* non-browsable autofs mount */
+
+#define ZS_COMMENT	0x00000000	/* comment */
+#define ZS_ZFSUTIL	0x00000001	/* caller is zfs(8) */
 
 #ifdef	__cplusplus
 }
