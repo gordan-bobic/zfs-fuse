@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/zfs_context.h>
 #include <libzfs.h>
+#include <libzfs_impl.h>
 #include <locale.h>
 
 libzfs_handle_t *g_zfs;
@@ -529,9 +530,6 @@ main(int argc, char **argv)
 		return (MOUNT_SYSERR);
 	}
 
-	zfs_close(zhp);
-	libzfs_fini(g_zfs);
-
 	/*
 	 * Legacy mount points may only be mounted using 'mount', never using
 	 * 'zfs mount'.  However, since 'zfs mount' actually invokes 'mount'
@@ -563,9 +561,13 @@ main(int argc, char **argv)
 	}
 
 	if (!fake) {
-		error = mount(dataset, mntpoint, mntflags, MNTTYPE_ZFS,
-		    NULL, 0, mntopts, sizeof (mntopts));
+		error = zfsfuse_mount(zhp->zfs_hdl, dataset,
+			mntpoint, MS_OPTIONSTR | mntflags, MNTTYPE_ZFS,
+			NULL, 0, "", 0);
 	}
+
+	zfs_close(zhp);
+	libzfs_fini(g_zfs);
 
 	if (error) {
 		switch (errno) {
