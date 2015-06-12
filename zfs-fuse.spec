@@ -2,7 +2,7 @@
 
 Name:			zfs-fuse
 Version:		0.7.1
-Release:		2%{?dist}
+Release:		4%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
 License:		CDDL
@@ -15,6 +15,8 @@ Source01:		zfs-fuse.service
 %endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
+Source04:		zfs-fuse.zfsrc
+Source05:		zfs-fuse.modules-load
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
 Requires:		lzo xz zlib bzip2 libaio
@@ -65,6 +67,9 @@ scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{
 %endif
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
+%{__install} -Dp -m 0644 %{SOURCE4} %{buildroot}%{_sysconfdir}/zfs/zfsrc
+%{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/modules-load.d/fuse.conf
+%{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sharedstatedir}/modules-load.d/fuse.conf
 
 #set stack not executable, BZ 911150
 for i in zdb zfs zfs-fuse zpool ztest; do
@@ -131,6 +136,7 @@ fi
 %defattr(-, root, root, -)
 %doc BUGS CHANGES contrib HACKING LICENSE README 
 %doc README.NFS STATUS TESTING TODO
+%{_sbindir}/mount.zfs
 %{_sbindir}/zdb
 %{_sbindir}/zfs
 %{_sbindir}/zfs-fuse
@@ -142,7 +148,10 @@ fi
 %else
 %{_unitdir}/%{name}.service
 %endif
+%{_sharedstatedir}/modules-load.d/fuse.conf
+%{_sysconfdir}/modules-load.d/fuse.conf
 %{_sysconfdir}/cron.weekly/98-%{name}-scrub
+%{_sysconfdir}/zfs/zfsrc
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %{_sysconfdir}/%{name}/zfs_pool_alert
 %{_mandir}/man8/zfs-fuse.8.gz
@@ -152,14 +161,13 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
-* Tue Jun 09 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-2
-- Improved systemd integration
-- .spec clean-up
-
-* Mon Jun 01 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-1
-- Added ashift setting support (Ray Vantassle)
+* Fri Jun 12 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-4
+- Add ashift setting support (Ray Vantassle)
 - Additional ARM patches (Ray Vantassle)
-- Backport extra Fedora patches that were added earlier
+- Backport extra out-of-tree Fedora patches
+- Backport mount.zfs from ZoL
+- Add the last of missing Seth Heeren's fixes
+- Improved systemd integration
 
 * Tue Aug 13 2013 Gordan Bobic <gordan@redsleeve.org> - 0.7.0.20131023-5
 - Update to Emmanuel Anne's latest branch for pool v26 support.
