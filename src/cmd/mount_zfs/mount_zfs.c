@@ -563,7 +563,7 @@ main(int argc, char **argv)
 	if (!fake) {
 		error = zfsfuse_mount(zhp->zfs_hdl, dataset,
 			mntpoint, MS_OPTIONSTR | mntflags, MNTTYPE_ZFS,
-			NULL, 0, "", 0);
+			NULL, 0, mntopts, strlen(mntopts));
 	}
 
 	zfs_close(zhp);
