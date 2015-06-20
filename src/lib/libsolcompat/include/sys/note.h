@@ -49,6 +49,8 @@ extern "C" {
 #define	_NOTE(s)
 #endif
 
+#define NOTE	_NOTE
+
 #ifdef	__cplusplus
 }
 #endif
