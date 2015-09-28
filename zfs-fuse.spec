@@ -8,7 +8,7 @@ Group:			System Environment/Base
 License:		CDDL
 URL:			https://github.com/gordan-bobic/zfs-fuse
 Source00:		%{name}/%{name}-%{version}.tar.xz
-%if %{?rhel} <= 6
+%if 0%{?rhel} <= 6
 Source01:		zfs-fuse.init
 %else
 Source01:		zfs-fuse.service
@@ -20,7 +20,7 @@ Source05:		zfs-fuse.modules-load
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
 Requires:		lzo xz zlib bzip2 libaio
-%if %{?rhel} <= 6
+%if 0%{?rhel} <= 6
 Requires(post):		chkconfig
 Requires(preun):	chkconfig initscripts
 Requires(postun):	initscripts
