@@ -47,7 +47,9 @@ static const option_map_t option_map[] = {
 	{ MNTOPT_NOAUTO,	MS_COMMENT,	ZS_COMMENT	},
 	{ MNTOPT_DEFAULTS,	MS_COMMENT,	ZS_COMMENT	},
 	{ MNTOPT_NODEVICES,	MS_NODEV,	ZS_COMMENT	},
+#ifdef MS_DIRSYNC
 	{ MNTOPT_DIRSYNC,	MS_DIRSYNC,	ZS_COMMENT	},
+#endif
 	{ MNTOPT_NOEXEC,	MS_NOEXEC,	ZS_COMMENT	},
 	{ MNTOPT_GROUP,		MS_GROUP,	ZS_COMMENT	},
 	{ MNTOPT_NETDEV,	MS_COMMENT,	ZS_COMMENT	},
@@ -61,9 +63,13 @@ static const option_map_t option_map[] = {
 	{ MNTOPT_USER,		MS_USERS,	ZS_COMMENT	},
 	{ MNTOPT_USERS,		MS_USERS,	ZS_COMMENT	},
 	/* acl flags passed with util-linux-2.24 mount command */
+#ifdef MS_POSIXACL
 	{ MNTOPT_ACL,		MS_POSIXACL,	ZS_COMMENT	},
+#endif
 	{ MNTOPT_NOACL,		MS_COMMENT,	ZS_COMMENT	},
+#ifdef MS_POSIXACL
 	{ MNTOPT_POSIXACL,	MS_POSIXACL,	ZS_COMMENT	},
+#endif
 #ifdef MS_NOATIME
 	{ MNTOPT_NOATIME,	MS_NOATIME,	ZS_COMMENT	},
 #endif
