@@ -1,8 +1,8 @@
 %global	_sbindir	/sbin
 
 Name:			zfs-fuse
-Version:		0.7.1
-Release:		4%{?dist}
+Version:		0.7.2
+Release:		1%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
 License:		CDDL
@@ -161,6 +161,9 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
+* Tue Jun 16 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.2-1
+- Support for pool versions 27 and 28
+
 * Fri Jun 12 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.1-4
 - Add ashift setting support (Ray Vantassle)
 - Additional ARM patches (Ray Vantassle)
