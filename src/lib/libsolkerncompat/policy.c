@@ -173,8 +173,11 @@ out:
 		return 0;
 	}
 	int nb = fuse_req_getgroups(cr->req, ngroups_max,groups);
-	if (nb < 0)
-		syslog(LOG_ERR,"fuse_req_getgroups returned an error, make sure /proc is available");
+/*
+ * Unfortunately, this floods syslog when rootfs is on zfs-fuse
+ *	if (nb < 0)
+ *		syslog(LOG_ERR,"fuse_req_getgroups returned an error, make sure /proc is available");
+ */
 	int found = 0;
 	for (int n=0; n<nb; n++)
 		if (groups[n] == gid) {
