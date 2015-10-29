@@ -1,0 +1,10 @@
+[Unit]
+Description=zfs-fuse PID reconstruction
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "/bin/echo `ps x | grep @sbin/zfs-fuse | head -1 | awk '{print $1;}'` > /var/run/zfs/zfs-fuse.pid"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target
