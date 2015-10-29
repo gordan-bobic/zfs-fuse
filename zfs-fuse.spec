@@ -157,7 +157,7 @@ fi
 %{_sharedstatedir}/modules-load.d/fuse.conf
 %{_sysconfdir}/modules-load.d/fuse.conf
 %{_sysconfdir}/cron.weekly/98-%{name}-scrub
-%{_sysconfdir}/zfs/zfsrc
+%config(noreplace) %{_sysconfdir}/zfs/zfsrc
 %config(noreplace) %{_sysconfdir}/sysconfig/%{name}
 %{_sysconfdir}/%{name}/zfs_pool_alert
 %{_mandir}/man8/zfs-fuse.8.gz
