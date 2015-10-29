@@ -151,6 +151,8 @@ fi
 %{_initrddir}/%{name}
 %else
 %{_unitdir}/%{name}.service
+%{_unitdir}/%{name}-pid.service
+%{_unitdir}/%{name}-oom.service
 %endif
 %{_sharedstatedir}/modules-load.d/fuse.conf
 %{_sysconfdir}/modules-load.d/fuse.conf
