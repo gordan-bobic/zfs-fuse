@@ -5,7 +5,7 @@ After=syslog.target
 [Service]
 Type=simple
 ExecStart=/sbin/zfs-fuse --no-daemon --pidfile /var/run/zfs/zfs-fuse.pid
-PIDFile=/var/run/zfs-fuse.pid
+PIDFile=/var/run/zfs/zfs-fuse.pid
 SuccessExitStatus=1
 
 [Install]
