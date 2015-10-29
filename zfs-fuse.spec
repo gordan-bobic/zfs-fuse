@@ -1,7 +1,7 @@
 %global	_sbindir	/sbin
 
 Name:			zfs-fuse
-Version:		0.7.2
+Version:		0.7.2.1
 Release:		1%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
@@ -12,6 +12,8 @@ Source00:		%{name}/%{name}-%{version}.tar.xz
 Source01:		zfs-fuse.init
 %else
 Source01:		zfs-fuse.service
+Source06:		zfs-fuse-pid.service
+Source07:		zfs-fuse-oom.service
 %endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
@@ -64,6 +66,8 @@ scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{
 %{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %else
 %{__install} -Dp -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
+%{__install} -Dp -m 0644 %{SOURCE6} %{buildroot}%{_unitdir}/%{name}-pid.service
+%{__install} -Dp -m 0644 %{SOURCE7} %{buildroot}%{_unitdir}/%{name}-oom.service
 %endif
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
@@ -161,6 +165,12 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
+* Thu Oct 29 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.2.1-1
+- Additional systemd service to immunize zfs-fuse against the
+  OOM killer
+- Silenece the fuse_req_getgroups warning as it floods syslog
+  when zfs-fuse is used for rootfs.
+
 * Tue Jun 16 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.2-1
 - Support for pool versions 27 and 28
 
