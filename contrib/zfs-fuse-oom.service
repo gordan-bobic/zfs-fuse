@@ -1,0 +1,12 @@
+[Unit]
+Description=zfs-fuse OOM killer immunization
+After=zfs-fuse-pid.service
+ConditionPathExists=/var/run/zfs/zfs-fuse.pid
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '/bin/echo -1000 > /proc/`cat /var/run/zfs/zfs-fuse.pid`/oom_score_adj'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=basic.target
