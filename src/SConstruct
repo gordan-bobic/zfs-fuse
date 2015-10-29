@@ -32,7 +32,7 @@ env.CacheDir('/tmp/.zfs-fuse.scons')
 env['CC'] = os.environ.setdefault("CC","gcc")
 env['CCFLAGS'] = os.environ.setdefault("CFLAGS","")
 env['LINKFLAGS'] = Split('-pipe -Wall')
-env.Append(CCFLAGS = Split('-pipe -Wall -std=c99 -Wno-switch -Wno-unused -Wno-missing-braces -Wno-parentheses -Wno-uninitialized -fno-strict-aliasing -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_REENTRANT -DTEXT_DOMAIN=\\"zfs-fuse\\" -O2 -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4 '))
+env.Append(CCFLAGS = Split('-pipe -Wall -std=c99 -Wno-switch -Wno-unused -Wno-missing-braces -Wno-parentheses -Wno-uninitialized -Wcast-align -fno-strict-aliasing -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_REENTRANT -DTEXT_DOMAIN=\\"zfs-fuse\\" -O2 -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector -fstrict-volatile-bitfields --param=ssp-buffer-size=4 '))
 
 if osname == "Linux":
   env.Append(CPPFLAGS = " -DLINUX_AIO")

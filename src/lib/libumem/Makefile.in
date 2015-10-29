@@ -126,7 +126,7 @@ CCAS = @CCAS@
 CCASFLAGS = @CCASFLAGS@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
-AM_CFLAGS = -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector --param=ssp-buffer-size=4
+AM_CFLAGS = -Wp,-D_FORTIFY_SOURCE=2 -fstack-protector -fstrict-volatile-bitfields --param=ssp-buffer-size=4
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
 CXX = @CXX@
