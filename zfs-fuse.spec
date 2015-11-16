@@ -53,7 +53,7 @@ iconv -o $f -f iso88591 -t utf8 $f.iso88591
 export CCFLAGS="%{optflags}"
 pushd src
 %if 0%{?rhel} <= 6
-%{__perl} -pi -e 's@-fstrict-volatile-bitfields@@' lib/libumem/Makefile.in
+%{__perl} -pi -e 's@-fstrict-volatile-bitfields@@' lib/libumem/Makefile.in SConstruct
 %endif
 
 scons --cache-disable --quiet debug=0 %{_smp_mflags}
