@@ -8,9 +8,11 @@ Group:			System Environment/Base
 License:		CDDL
 URL:			https://github.com/gordan-bobic/zfs-fuse
 Source00:		%{name}/%{name}-%{version}.tar.xz
+%if 0%{?rhel} > 6
 Source01:		zfs-fuse.service
 Source06:		zfs-fuse-pid.service
 Source07:		zfs-fuse-oom.service
+%endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
 Source05:		zfs-fuse.modules-load
