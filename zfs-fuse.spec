@@ -54,11 +54,10 @@ iconv -o $f -f iso88591 -t utf8 $f.iso88591
 
 %build
 export CCFLAGS="%{optflags}"
-pushd src/lib/libumem
-aclocal
-automake -a
-popd
 pushd src
+%if 0%{?rhel} <= 6
+%{__perl} -pi -e 's@-fstrict-volatile-bitfields@@' lib/libumem/Makefile.in
+%endif
 
 scons --cache-disable --quiet debug=0 %{_smp_mflags}
 
