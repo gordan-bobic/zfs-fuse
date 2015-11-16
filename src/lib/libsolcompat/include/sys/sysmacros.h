@@ -256,7 +256,7 @@ extern unsigned char bcd_to_byte[256];
  * eg, P2ROUNDUP(0x1234, 0x100) == 0x1300 (0x13*align)
  * eg, P2ROUNDUP(0x5600, 0x100) == 0x5600 (0x56*align)
  */
-#define	P2ROUNDUP(x, align)		(-(-(x) & -(align)))
+#define	P2ROUNDUP(x, align)		((((x) - 1) | ((align) - 1)) + 1)
 
 /*
  * return the ending address of the block that x is in
@@ -307,7 +307,7 @@ extern unsigned char bcd_to_byte[256];
 #define	P2NPHASE_TYPED(x, align, type)	\
 	(-(type)(x) & ((type)(align) - 1))
 #define	P2ROUNDUP_TYPED(x, align, type)	\
-	(-(-(type)(x) & -(type)(align)))
+	((((type)(x) - 1) | ((type)(align) - 1)) + 1)
 #define	P2END_TYPED(x, align, type)	\
 	(-(~(type)(x) & -(type)(align)))
 #define	P2PHASEUP_TYPED(x, align, phase, type)	\
