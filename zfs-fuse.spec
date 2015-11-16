@@ -54,6 +54,9 @@ iconv -o $f -f iso88591 -t utf8 $f.iso88591
 
 %build
 export CCFLAGS="%{optflags}"
+pushd src/lib/libumem
+automake -af
+popd
 pushd src
 
 scons --cache-disable --quiet debug=0 %{_smp_mflags}
