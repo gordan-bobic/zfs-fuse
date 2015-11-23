@@ -47,11 +47,6 @@ Project home page is at http://zfs-fuse.net/
 %prep
 %setup -q
 
-f=LICENSE
-%{__mv} $f $f.iso88591
-iconv -o $f -f iso88591 -t utf8 $f.iso88591
-%{__rm} -f $f.iso88591
-
 %build
 export CCFLAGS="%{optflags}"
 pushd src
