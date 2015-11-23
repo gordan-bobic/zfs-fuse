@@ -12,9 +12,12 @@ Source00:		%{name}/%{name}-%{version}.tar.xz
 Source01:		zfs-fuse.service
 Source06:		zfs-fuse-pid.service
 Source07:		zfs-fuse-oom.service
+%else
+Source01:		zfs-fuse.init
 %endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
+Source04:		zfs-fuse.zfsrc
 Source05:		zfs-fuse.modules-load
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
@@ -63,7 +66,7 @@ scons --cache-disable --quiet debug=0 %{_smp_mflags}
 pushd src
 scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
 %if 0%{?rhel} <= 6
-%{__install} -Dp -m 0755 ../contrib/zfs-fuse.initd.fedora %{buildroot}%{_initrddir}/%{name}
+%{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
 %else
 %{__install} -Dp -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
 %{__install} -Dp -m 0644 %{SOURCE6} %{buildroot}%{_unitdir}/%{name}-pid.service
@@ -71,7 +74,7 @@ scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{
 %endif
 %{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
 %{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
-%{__install} -Dp -m 0644 ../contrib/zfsrc %{buildroot}%{_sysconfdir}/zfs/zfsrc
+%{__install} -Dp -m 0644 %{SOURCE4} %{buildroot}%{_sysconfdir}/zfs/zfsrc
 %{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/modules-load.d/fuse.conf
 %{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sharedstatedir}/modules-load.d/fuse.conf
 
