@@ -55,7 +55,7 @@ fuse-mount-options = default_permissions
 # a thread is 8 Mb. This affects only the virtual memory usage, not the real
 # memory, but it's still an impressive number for some unused ram.
 # So you can limit it here, in kb. Default is no limit
-# stack-size = 32
+stack-size = 32
 
 # no-kstat-mount
 # This option disables the kstat mount in /zfs-kstat, useless most of the
