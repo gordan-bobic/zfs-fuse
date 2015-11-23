@@ -17,7 +17,7 @@ Source01:		zfs-fuse.init
 %endif
 Source02:		zfs-fuse.scrub
 Source03:		zfs-fuse.sysconfig
-Source04:		zfs-fuse.zfsrc
+Source04:		zfsrc
 Source05:		zfs-fuse.modules-load
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
