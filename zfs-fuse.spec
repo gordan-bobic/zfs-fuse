@@ -8,17 +8,6 @@ Group:			System Environment/Base
 License:		CDDL
 URL:			https://github.com/gordan-bobic/zfs-fuse
 Source00:		%{name}/%{name}-%{version}.tar.xz
-%if 0%{?rhel} > 6
-Source01:		zfs-fuse.service
-Source06:		zfs-fuse-pid.service
-Source07:		zfs-fuse-oom.service
-%else
-Source01:		zfs-fuse.init
-%endif
-Source02:		zfs-fuse.scrub
-Source03:		zfs-fuse.sysconfig
-Source04:		zfsrc
-Source05:		zfs-fuse.modules-load
 BuildRequires:		fuse-devel libaio-devel scons zlib-devel openssl-devel libattr-devel prelink lzo-devel xz-devel bzip2-devel
 Requires:		fuse >= 2.7.4-1
 Requires:		lzo xz zlib bzip2 libaio
@@ -61,17 +50,17 @@ scons --cache-disable --quiet debug=0 %{_smp_mflags}
 pushd src
 scons debug=0 install install_dir=%{buildroot}%{_sbindir} man_dir=%{buildroot}%{_mandir}/man8/ cfg_dir=%{buildroot}/%{_sysconfdir}/%{name}
 %if 0%{?rhel} <= 6
-%{__install} -Dp -m 0755 %{SOURCE1} %{buildroot}%{_initrddir}/%{name}
+%{__install} -Dp -m 0755 ../zfs-fuse.init %{buildroot}%{_initrddir}/%{name}
 %else
-%{__install} -Dp -m 0644 %{SOURCE1} %{buildroot}%{_unitdir}/%{name}.service
-%{__install} -Dp -m 0644 %{SOURCE6} %{buildroot}%{_unitdir}/%{name}-pid.service
-%{__install} -Dp -m 0644 %{SOURCE7} %{buildroot}%{_unitdir}/%{name}-oom.service
+%{__install} -Dp -m 0644 ../zfs-fuse.service %{buildroot}%{_unitdir}/%{name}.service
+%{__install} -Dp -m 0644 ../zfs-fuse-pid.service %{buildroot}%{_unitdir}/%{name}-pid.service
+%{__install} -Dp -m 0644 ../zfs-fuse-oom.service %{buildroot}%{_unitdir}/%{name}-oom.service
 %endif
-%{__install} -Dp -m 0755 %{SOURCE2} %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
-%{__install} -Dp -m 0644 %{SOURCE3} %{buildroot}%{_sysconfdir}/sysconfig/%{name}
-%{__install} -Dp -m 0644 %{SOURCE4} %{buildroot}%{_sysconfdir}/zfs/zfsrc
-%{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sysconfdir}/modules-load.d/fuse.conf
-%{__install} -Dp -m 0644 %{SOURCE5} %{buildroot}%{_sharedstatedir}/modules-load.d/fuse.conf
+%{__install} -Dp -m 0755 ../zfs-fuse.scrub %{buildroot}%{_sysconfdir}/cron.weekly/98-%{name}-scrub
+%{__install} -Dp -m 0644 ../zfs-fuse.sysconfig %{buildroot}%{_sysconfdir}/sysconfig/%{name}
+%{__install} -Dp -m 0644 ../zfsrc %{buildroot}%{_sysconfdir}/zfs/zfsrc
+%{__install} -Dp -m 0644 ../zfs-fuse.modules-load %{buildroot}%{_sysconfdir}/modules-load.d/fuse.conf
+%{__install} -Dp -m 0644 ../zfs-fuse.modules-load %{buildroot}%{_sharedstatedir}/modules-load.d/fuse.conf
 
 #set stack not executable, BZ 911150
 for i in zdb zfs zfs-fuse zpool ztest; do
