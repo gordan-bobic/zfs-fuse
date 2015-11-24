@@ -1,3 +1,7 @@
+2015-10-21 - Release 0.7.2
+	* Added support for pool version 28
+	* Improved support for rpm building on older distributions
+
 2015-06-12 - Release 0.7.1
 	* Added mount.zfs for legacy mounts
 	* Support for rootfs with systemd

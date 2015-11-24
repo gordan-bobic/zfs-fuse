@@ -6,7 +6,7 @@ vdev-cache-size = 10
 # Maximum arc size : this is the main cache for zfs in Mb
 # default size : 128 Mb, minimum size : 16 Mb
 # Notice that arc is also used for the hash tables if you use the dedup option
-max-arc-size = 100
+max-arc-size = 16
 
 # zfs-prefetch-disable : disable zfs high level prefetch cache.
 # This setting can eat as much as 150 Mb of ram, so uncomment if you want

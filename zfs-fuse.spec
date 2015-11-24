@@ -1,7 +1,7 @@
 %global	_sbindir	/sbin
 
 Name:			zfs-fuse
-Version:		0.7.2.1
+Version:		0.7.2.2
 Release:		1%{?dist}
 Summary:		ZFS ported to Linux FUSE
 Group:			System Environment/Base
@@ -154,6 +154,11 @@ fi
 %{_mandir}/man8/zstreamdump.8.gz
 
 %changelog
+* Tue Nov 24 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.2.2-1
+- Fixed building RPMs directly from a tarball.
+- Add systemd service to immunize zfs-fuse from OOM killer.
+- Extra alignment compiler flags (only on EL7+)
+
 * Thu Oct 29 2015 Gordan Bobic <gordan@redsleeve.org> - 0.7.2.1-1
 - Additional systemd service to immunize zfs-fuse against the
   OOM killer
